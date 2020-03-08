@@ -55,6 +55,7 @@ typedef struct dictEntry {
     struct dictEntry *next;
 } dictEntry;
 
+// 字典类型
 typedef struct dictType {
     uint64_t (*hashFunction)(const void *key);
     void *(*keyDup)(void *privdata, const void *key);
@@ -68,8 +69,8 @@ typedef struct dictType {
  * implement incremental rehashing, for the old to the new table. */
 typedef struct dictht {
     dictEntry **table;
-    unsigned long size;
-    unsigned long sizemask;
+    unsigned long size;         // 真实容量
+    unsigned long sizemask;     // 真实容量大小掩码 size - 1
     unsigned long used;
 } dictht;
 
@@ -77,8 +78,8 @@ typedef struct dict {
     dictType *type;
     void *privdata;
     dictht ht[2];
-    long rehashidx; /* rehashing not in progress if rehashidx == -1 */
-    unsigned long iterators; /* number of iterators currently running */
+    long rehashidx; /* rehashing not in progress if rehashidx == -1 ,在进行rehash操作时表示当前移动的bucket索引 */
+    unsigned long iterators; /* number of iterators currently running 记录当前正在执行的迭代器 */
 } dict;
 
 /* If safe is set to 1 this is a safe iterator, that means, you can call
@@ -90,7 +91,7 @@ typedef struct dictIterator {
     long index;
     int table, safe;
     dictEntry *entry, *nextEntry;
-    /* unsafe iterator fingerprint for misuse detection. */
+    /* unsafe iterator fingerprint for misuse(滥用) detection. */
     long long fingerprint;
 } dictIterator;
 

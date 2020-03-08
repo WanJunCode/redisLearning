@@ -47,6 +47,7 @@
 
 /* Fast tolower() alike function that does not care about locale
  * but just returns a-z insetad of A-Z. */
+// 获得小写字符
 int siptlw(int c) {
     if (c >= 'A' && c <= 'Z') {
         return c+('a'-'A');
@@ -113,6 +114,8 @@ int siptlw(int c) {
         v2 = ROTL(v2, 32);                                                     \
     } while (0)
 
+
+// 简单的hash函数
 uint64_t siphash(const uint8_t *in, const size_t inlen, const uint8_t *k) {
 #ifndef UNALIGNED_LE_CPU
     uint64_t hash;
@@ -172,6 +175,7 @@ uint64_t siphash(const uint8_t *in, const size_t inlen, const uint8_t *k) {
 #endif
 }
 
+// 大小写不敏感的 简单hash实现
 uint64_t siphash_nocase(const uint8_t *in, const size_t inlen, const uint8_t *k)
 {
 #ifndef UNALIGNED_LE_CPU
