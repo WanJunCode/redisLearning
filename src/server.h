@@ -752,9 +752,7 @@ typedef struct user {
 /* With multiplexing we need to take per-client state.
  * Clients are taken in a linked list. */
 
-#define CLIENT_ID_AOF (UINT64_MAX) /* Reserved ID for the AOF client. If you
-                                      need more reserved IDs use UINT64_MAX-1,
-                                      -2, ... and so forth. */
+#define CLIENT_ID_AOF (UINT64_MAX) /* Reserved ID for the AOF client. If you need more reserved IDs use UINT64_MAX-1, -2, ... and so forth. */
 
 typedef struct client {
     uint64_t id;            /* Client incremental unique ID. */
@@ -867,11 +865,11 @@ struct sharedObjectsStruct {
 typedef struct zskiplistNode {
     sds ele;
     double score;
-    struct zskiplistNode *backward;
+    struct zskiplistNode *backward;//后退指针
     struct zskiplistLevel {
         struct zskiplistNode *forward;
-        unsigned long span;
-    } level[];
+        unsigned long span;//代表该节点在每层到下一个节点所跨越的节点长度：层跨度
+    } level[];//柔性数组
 } zskiplistNode;
 
 typedef struct zskiplist {
@@ -881,8 +879,8 @@ typedef struct zskiplist {
 } zskiplist;
 
 typedef struct zset {
-    dict *dict;
-    zskiplist *zsl;
+    dict *dict;         //字典
+    zskiplist *zsl;     //跳跃表
 } zset;
 
 typedef struct clientBufferLimitsConfig {

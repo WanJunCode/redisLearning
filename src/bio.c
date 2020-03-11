@@ -15,8 +15,9 @@
  * DESIGN
  * ------
  *
- * The design is trivial, we have a structure representing a job to perform
+ * The design is trivial(微不足道的), we have a structure representing a job to perform
  * and a different thread and job queue for every job type.
+ * 每个线程都从队列中等待新的工作，并处理
  * Every thread waits for new jobs in its queue, and process every job
  * sequentially.
  *
@@ -24,6 +25,7 @@
  * recently inserted to the most recently inserted (older jobs processed
  * first).
  *
+ * 当前没有办法告知job的创建者，job已经执行完成
  * Currently there is no way for the creator of the job to be notified about
  * the completion of the operation, this will only be added when/if needed.
  *
@@ -61,11 +63,11 @@
 #include "server.h"
 #include "bio.h"
 
-static pthread_t bio_threads[BIO_NUM_OPS];
-static pthread_mutex_t bio_mutex[BIO_NUM_OPS];
+static pthread_t bio_threads[BIO_NUM_OPS];//线程描述符数组
+static pthread_mutex_t bio_mutex[BIO_NUM_OPS];//锁数组
 static pthread_cond_t bio_newjob_cond[BIO_NUM_OPS];
 static pthread_cond_t bio_step_cond[BIO_NUM_OPS];
-static list *bio_jobs[BIO_NUM_OPS];
+static list *bio_jobs[BIO_NUM_OPS];//job 链表数组，每个元素都是一个链表
 /* The following array is used to hold the number of pending jobs for every
  * OP type. This allows us to export the bioPendingJobsOfType() API that is
  * useful when the main thread wants to perform some operation that may involve
@@ -89,14 +91,14 @@ void lazyfreeFreeDatabaseFromBioThread(dict *ht1, dict *ht2);
 void lazyfreeFreeSlotsMapFromBioThread(zskiplist *sl);
 
 /* Make sure we have enough stack to perform all the things we do in the
- * main thread. */
+ * main thread. 确保我们的主线程具有足够大的栈容量 4M */
 #define REDIS_THREAD_STACK_SIZE (1024*1024*4)
 
-/* Initialize the background system, spawning the thread. */
+/* Initialize the background system, spawning the thread. 初始化后台系统，产生线程 */
 void bioInit(void) {
-    pthread_attr_t attr;
+    pthread_attr_t attr;//线程属性
     pthread_t thread;
-    size_t stacksize;
+    size_t stacksize;//栈大小
     int j;
 
     /* Initialization of state vars and objects */
@@ -108,9 +110,10 @@ void bioInit(void) {
         bio_pending[j] = 0;
     }
 
-    /* Set the stack size as by default it may be small in some system */
+    /* Set the stack size as by default it may be small in some system 设置线程栈大小为默认数值，因为某些系统上线程栈很小 */
     pthread_attr_init(&attr);
     pthread_attr_getstacksize(&attr,&stacksize);
+    // ! 抱怨Solaris了? Solaris系统线程初始化大小为0
     if (!stacksize) stacksize = 1; /* The world is full of Solaris Fixes */
     while (stacksize < REDIS_THREAD_STACK_SIZE) stacksize *= 2;
     pthread_attr_setstacksize(&attr, stacksize);
@@ -142,10 +145,11 @@ void bioCreateBackgroundJob(int type, void *arg1, void *arg2, void *arg3) {
     pthread_mutex_unlock(&bio_mutex[type]);
 }
 
+// 根据参数 arg 判断线程需要开启的任务类型
 void *bioProcessBackgroundJobs(void *arg) {
     struct bio_job *job;
     unsigned long type = (unsigned long) arg;
-    sigset_t sigset;
+    sigset_t sigset;//信号集
 
     /* Check that the type is within the right interval. */
     if (type >= BIO_NUM_OPS) {
