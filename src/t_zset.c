@@ -137,18 +137,19 @@ int zslRandomLevel(void) {
 }
 
 /* 在跳跃表中插入一个新的节点，假设该节点之前并不存在.  跳跃表接管传入的 sds 生命周期
+ * 首先使用rank[]、update[]数组准备好需要插入结点在每一层的插入位置node和span，新结点被插入的层i后续通过随机算法获得。
+ * 确定插入层i后，可以确认rank[i]是距离headr的距离，update[i]是需要插入的结点
  * Insert a new node in the skiplist. Assumes the element does not already
  * exist (up to the caller to enforce that). The skiplist takes ownership
  * of the passed SDS string 'ele'. */
 zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
     zskiplistNode *update[ZSKIPLIST_MAXLEVEL], *x;//数组指针，存储每层的插入位置节点
-    unsigned int rank[ZSKIPLIST_MAXLEVEL];
+    unsigned int rank[ZSKIPLIST_MAXLEVEL];//存储每层需要插入的结点距离header的距离
     int i, level;
 
     serverAssert(!isnan(score));//断言score是正确可用的
     x = zsl->header;
-    // i 从大到小遍历 level
-    // level越高每一次forward跨越的节点越多，先大间距的查找，随着level的减小，查找范围逐渐缩小
+    // i 从大到小遍历 level，level越高每一次forward跨越的节点越多，先大间距的查找，随着level的减小，查找范围逐渐缩小
     for (i = zsl->level-1; i >= 0; i--) {
         /* store rank that is crossed to reach the insert position */
         // rank[i]用来记录当前节点x与header的距离，随着x的移动,rank[i]实时更新； header就是level-1层
@@ -173,14 +174,17 @@ zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
     level = zslRandomLevel();
     // 如果要创建的节点level大于跳跃表当前的level，对增加的部分进行初始化
     if (level > zsl->level) {
+        // 如果随机选择的等级大于当前的等级
+        // i 遍历 【zsl->level， level】
         for (i = zsl->level; i < level; i++) {
             rank[i] = 0;
             update[i] = zsl->header;
+            // zsl->header->level[i].span = zsl->length
             update[i]->level[i].span = zsl->length;
         }
-        zsl->level = level;
+        zsl->level = level;//更新跳跃表当前的level
     }
-    // 创建一个跳跃表节点
+    // 创建一个跳跃表节点,level表示当前节点需要插入的层数，该节点的forward数组长度为level
     x = zslCreateNode(level,score,ele);
     for (i = 0; i < level; i++) {
         // 将x节点插入到第i层的 update节点前
