@@ -11,3 +11,7 @@ dict.h  字典
 
 2020/3/9 完成dict.c阅读
 server.h t_zset.c 跳跃表部分
+
+2020/3/12 完成跳跃表，插入，删除操作
+
+hyperloglog.c  理论学习
