@@ -594,6 +594,7 @@ typedef struct RedisModuleDigest {
 #define LRU_CLOCK_RESOLUTION 1000 /* LRU clock resolution in ms */
 
 #define OBJ_SHARED_REFCOUNT INT_MAX
+
 typedef struct redisObject {
     unsigned type:4;
     unsigned encoding:4;
@@ -1009,6 +1010,7 @@ struct clusterState;
 #define CHILD_INFO_TYPE_AOF 1
 #define CHILD_INFO_TYPE_MODULE 3
 
+// redis 服务器
 struct redisServer {
     /* General */
     pid_t pid;                  /* Main process pid. */

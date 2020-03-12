@@ -59,7 +59,7 @@
  *    a 6-bit integer. 密集表达式 每个条目是使用6bit来表示的
  * 2) A "sparse" representation using run length compression suitable
  *    for representing HyperLogLogs with many registers set to 0 in
- *    a memory efficient way. 稀疏 使用一种动态长度
+ *    a memory efficient way. 稀疏表达式 使用一种动态长度
  *
  *
  * HLL header
@@ -103,7 +103,7 @@
  *
  * Sparse representation
  * ===
- * 稀疏 使用3个操作码
+ * 稀疏 使用3个操作码  ZERO  XZERO  VAL
  * The sparse representation encodes registers using a run length
  * encoding composed of three opcodes, two using one byte, and one using
  * of two bytes. The opcodes are called ZERO, XZERO and VAL.
@@ -190,7 +190,7 @@ struct hllhdr {
     uint8_t encoding;   /* HLL_DENSE or HLL_SPARSE. */
     uint8_t notused[3]; /* Reserved for future use, must be zero. 预留长度,内存对齐 */
     uint8_t card[8];    /* Cached cardinality, little endian. 缓存基数 */
-    uint8_t registers[]; /* Data bytes. */
+    uint8_t registers[]; /* Data bytes. 柔性数组*/
 };
 
 /* The cached cardinality MSB is used to signal validity of the cached value. */
@@ -203,7 +203,7 @@ struct hllhdr {
 #define HLL_REGISTERS (1<<HLL_P) /* With P=14, 16384 registers. P对应的桶数量 */
 #define HLL_P_MASK (HLL_REGISTERS-1) /* Mask to index register. */
 #define HLL_BITS 6 /* Enough to count up to 63 leading zeroes. */
-#define HLL_REGISTER_MAX ((1<<HLL_BITS)-1)
+#define HLL_REGISTER_MAX ((1<<HLL_BITS)-1)      // 111 111
 #define HLL_HDR_SIZE sizeof(struct hllhdr)
 #define HLL_DENSE_SIZE (HLL_HDR_SIZE+((HLL_REGISTERS*HLL_BITS+7)/8))        // 密集表达式 的大小
 #define HLL_DENSE 0 /* Dense encoding. 密集表达式编码 */
@@ -214,7 +214,7 @@ struct hllhdr {
 // static 静态文件作用域
 static char *invalid_hll_err = "-INVALIDOBJ Corrupted HLL object detected\r\n";
 
-/* =========================== Low level bit macros ========================= */
+/* =========================== Low level bit macros 底层的bit宏 ========================= */
 
 /* Macros to access the dense representation. 处理密集表达式的宏
  *
@@ -381,7 +381,7 @@ static char *invalid_hll_err = "-INVALIDOBJ Corrupted HLL object detected\r\n";
 #define HLL_SPARSE_XZERO_LEN(p) (((((*(p)) & 0x3f) << 8) | (*((p)+1)))+1)
 #define HLL_SPARSE_VAL_VALUE(p) ((((*(p)) >> 2) & 0x1f)+1)
 #define HLL_SPARSE_VAL_LEN(p) (((*(p)) & 0x3)+1)
-#define HLL_SPARSE_VAL_MAX_VALUE 32
+#define HLL_SPARSE_VAL_MAX_VALUE 32                 // 稀疏表达式中register可以表示的最大值为32
 #define HLL_SPARSE_VAL_MAX_LEN 4
 #define HLL_SPARSE_ZERO_MAX_LEN 64
 #define HLL_SPARSE_XZERO_MAX_LEN 16384
@@ -599,19 +599,22 @@ void hllDenseRegHisto(uint8_t *registers, int* reghisto) {
     }
 }
 
-/* ================== Sparse representation implementation  ================= */
+/* ================== Sparse representation implementation 系数表达式的实现 ================= */
 
-/* Convert the HLL with sparse representation given as input in its dense
+/* 稀疏表达式转换为密集表达式
+ * Convert the HLL with sparse representation given as input in its dense
  * representation. Both representations are represented by SDS strings, and
  * the input representation is freed as a side effect.
+ * 两种表达式都使用sds，在指针前端具有长度类型标志
  *
  * The function returns C_OK if the sparse representation was valid,
  * otherwise C_ERR is returned if the representation was corrupted. */
 int hllSparseToDense(robj *o) {
+    // robi->ptr 指向稀疏/密集表达式
     sds sparse = o->ptr, dense;
     struct hllhdr *hdr, *oldhdr = (struct hllhdr*)sparse;
     int idx = 0, runlen, regval;
-    uint8_t *p = (uint8_t*)sparse, *end = p+sdslen(sparse);
+    uint8_t *p = (uint8_t*)sparse, *end = p+sdslen(sparse);//获得稀疏表达式开始、结束指针
 
     /* If the representation is already the right one return ASAP. */
     hdr = (struct hllhdr*) sparse;
@@ -620,28 +623,28 @@ int hllSparseToDense(robj *o) {
     /* Create a string of the right size filled with zero bytes.
      * Note that the cached cardinality is set to 0 as a side effect
      * that is exactly the cardinality of an empty HLL. */
-    dense = sdsnewlen(NULL,HLL_DENSE_SIZE);
+    dense = sdsnewlen(NULL,HLL_DENSE_SIZE);//创建密集表达式指针及内存长度
     hdr = (struct hllhdr*) dense;
-    *hdr = *oldhdr; /* This will copy the magic and cached cardinality. */
+    *hdr = *oldhdr; /* This will copy the magic and cached cardinality. 结构体最后是柔性数组，其他都是基本类型 */
     hdr->encoding = HLL_DENSE;
 
-    /* Now read the sparse representation and set non-zero registers
-     * accordingly. */
-    p += HLL_HDR_SIZE;
+    /* Now read the sparse representation and set non-zero registers accordingly. 现在读取稀疏表达式并设置非零的相应桶register */
+    p += HLL_HDR_SIZE;// uint8_t指针p现在偏移到稀疏表达式的数据指针部分，直指register
     while(p < end) {
-        if (HLL_SPARSE_IS_ZERO(p)) {
+        if (HLL_SPARSE_IS_ZERO(p)) {        //ZERO
             runlen = HLL_SPARSE_ZERO_LEN(p);
             idx += runlen;
             p++;
-        } else if (HLL_SPARSE_IS_XZERO(p)) {
+        } else if (HLL_SPARSE_IS_XZERO(p)) {    //XZERO
             runlen = HLL_SPARSE_XZERO_LEN(p);
             idx += runlen;
             p += 2;
-        } else {
+        } else {    // VAL
             runlen = HLL_SPARSE_VAL_LEN(p);
             regval = HLL_SPARSE_VAL_VALUE(p);
             if ((runlen + idx) > HLL_REGISTERS) break; /* Overflow. */
             while(runlen--) {
+                // 设置密集表达式的idx索引的register值为 regval
                 HLL_DENSE_SET_REGISTER(hdr->registers,idx,regval);
                 idx++;
             }
@@ -650,19 +653,20 @@ int hllSparseToDense(robj *o) {
     }
 
     /* If the sparse representation was valid, we expect to find idx
-     * set to HLL_REGISTERS. */
+     * set to HLL_REGISTERS. 密集表达式的register数量应该是1<<14,如果没有达到说明 */
     if (idx != HLL_REGISTERS) {
         sdsfree(dense);
         return C_ERR;
     }
 
-    /* Free the old representation and set the new one. */
+    /* Free the old representation and set the new one. 释放之前的稀疏表达式并设置为新的密集表达式 */
     sdsfree(o->ptr);
     o->ptr = dense;
     return C_OK;
 }
 
-/* Low level function to set the sparse HLL register at 'index' to the
+/* 设置稀疏表达式register的index索引新值为count(如果count比之前的旧值大)
+ * Low level function to set the sparse HLL register at 'index' to the
  * specified value if the current value is smaller than 'count'.
  *
  * The object 'o' is the String object holding the HLL. The function requires
@@ -672,7 +676,11 @@ int hllSparseToDense(robj *o) {
  * On success, the function returns 1 if the cardinality changed, or 0
  * if the register for this element was not updated.
  * On error (if the representation is invalid) -1 is returned.
- *
+ * return 1 设置新值成功
+ * return 0 没有进行更新
+ * return -1 执行错误
+ * 
+ * 副作用：也许会将稀疏表达式升级为密集表达式
  * As a side effect the function may promote the HLL representation from
  * sparse to dense: this happens when a register requires to be set to a value
  * not representable with the sparse representation, or when the resulting
@@ -692,17 +700,18 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
      * into XZERO-VAL-XZERO). Make sure there is enough space right now
      * so that the pointers we take during the execution of the function
      * will be valid all the time. */
-    o->ptr = sdsMakeRoomFor(o->ptr,3);
+    o->ptr = sdsMakeRoomFor(o->ptr,3);//为稀疏表达式增加3字节长度
 
     /* Step 1: we need to locate the opcode we need to modify to check
      * if a value update is actually needed. */
-    sparse = p = ((uint8_t*)o->ptr) + HLL_HDR_SIZE;
-    end = p + sdslen(o->ptr) - HLL_HDR_SIZE;
+    sparse = p = ((uint8_t*)o->ptr) + HLL_HDR_SIZE;//指针偏移获得稀疏表达式register位置
+    end = p + sdslen(o->ptr) - HLL_HDR_SIZE;//获得稀疏表达式register尾部位置
 
     first = 0;
     prev = NULL; /* Points to previous opcode at the end of the loop. */
     next = NULL; /* Points to the next opcode at the end of the loop. */
     span = 0;
+    // 遍历整个稀疏表达式的register
     while(p < end) {
         long oplen;
 
@@ -721,6 +730,7 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
             oplen = 2;
         }
         /* Break if this opcode covers the register as 'index'. */
+        // 因为first+span从0开始增长，判断是否经过需要设置的index
         if (index <= first+span-1) break;
         prev = p;
         p += oplen;
@@ -729,7 +739,7 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
     if (span == 0 || p >= end) return -1; /* Invalid format. */
 
     next = HLL_SPARSE_IS_XZERO(p) ? p+2 : p+1;
-    if (next >= end) next = NULL;
+    if (next >= end) next = NULL;//判断如果没有next opcode
 
     /* Cache current opcode type to avoid using the macro again and
      * again for something that will not change.
@@ -762,30 +772,33 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
      * A) If it is a VAL opcode already set to a value >= our 'count'
      *    no update is needed, regardless of the VAL run-length field.
      *    In this case PFADD returns 0 since no changes are performed.
+     *    如果新值小于旧值，不需要进行更新和scratch
      *
      * B) If it is a VAL opcode with len = 1 (representing only our
      *    register) and the value is less than 'count', we just update it
-     *    since this is a trivial case. */
+     *    since this is a trivial(不重要的) case.
+     *     
+     **/
     if (is_val) {
         oldcount = HLL_SPARSE_VAL_VALUE(p);
         /* Case A. */
         if (oldcount >= count) return 0;
 
-        /* Case B. */
+        /* Case B. 长度为1，所以不需要更新 */
         if (runlen == 1) {
             HLL_SPARSE_VAL_SET(p,count,1);
             goto updated;
         }
     }
 
-    /* C) Another trivial to handle case is a ZERO opcode with a len of 1.
+    /* C) Another trivial(不重要的) to handle case is a ZERO opcode with a len of 1.
      * We can just replace it with a VAL opcode with our value and len of 1. */
     if (is_zero && runlen == 1) {
         HLL_SPARSE_VAL_SET(p,count,1);
         goto updated;
     }
 
-    /* D) General case.
+    /* D) General case. 最常见的例子
      *
      * The other cases are more complex: our register requires to be updated
      * and is either currently represented by a VAL opcode with len > 1,
@@ -853,7 +866,7 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
      int seqlen = n-seq;
      int oldlen = is_xzero ? 2 : 1;
      int deltalen = seqlen-oldlen;
-
+    
      if (deltalen > 0 &&
          sdslen(o->ptr)+deltalen > server.hll_sparse_max_bytes) goto promote;
      if (deltalen && next) memmove(next+deltalen,next,end-next);
@@ -904,7 +917,7 @@ updated:
     HLL_INVALIDATE_CACHE(hdr);
     return 1;
 
-promote: /* Promote to dense representation. */
+promote: /* Promote to dense representation. 升级为密集表达式 */
     if (hllSparseToDense(o) == C_ERR) return -1; /* Corrupted HLL. */
     hdr = o->ptr;
 
