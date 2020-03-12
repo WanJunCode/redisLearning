@@ -1,4 +1,4 @@
-/* hyperloglog.c - Redis HyperLogLog probabilistic cardinality approximation.
+/* hyperloglog.c - Redis HyperLogLog probabilistic(概率的) cardinality(基数) approximation(近似值).
  * This file implements the algorithm and the exported Redis commands.
  *
  * Copyright (c) 2014, Salvatore Sanfilippo <antirez at gmail dot com>
@@ -37,12 +37,12 @@
 /* The Redis HyperLogLog implementation is based on the following ideas:
  *
  * * The use of a 64 bit hash function as proposed in [1], in order to don't
- *   limited to cardinalities up to 10^9, at the cost of just 1 additional
+ *   limited to cardinalities(基数) up to 10^9, at the cost of just 1 additional
  *   bit per register.
  * * The use of 16384 6-bit registers for a great level of accuracy, using
  *   a total of 12k per key.
  * * The use of the Redis string data type. No new type is introduced.
- * * No attempt is made to compress the data structure as in [1]. Also the
+ * * No attempt is made to compress(压缩) the data structure as in [1]. Also the
  *   algorithm used is the original HyperLogLog Algorithm as in [2], with
  *   the only difference that a 64 bit hash function is used, so no correction
  *   is performed for values near 2^32 as in [1].
@@ -56,10 +56,10 @@
  * Redis uses two representations:
  *
  * 1) A "dense" representation where every entry is represented by
- *    a 6-bit integer.
+ *    a 6-bit integer. 密集表达式 每个条目是使用6bit来表示的
  * 2) A "sparse" representation using run length compression suitable
  *    for representing HyperLogLogs with many registers set to 0 in
- *    a memory efficient way.
+ *    a memory efficient way. 稀疏 使用一种动态长度
  *
  *
  * HLL header
@@ -70,17 +70,21 @@
  * +------+---+-----+----------+
  * | HYLL | E | N/U | Cardin.  |
  * +------+---+-----+----------+
- *
+ * 
+ * 前4比特的 魔数 表示 HYLL 
+ * E 用于判断是 HLL_DENSE 或者 HLL_SPARSE
  * The first 4 bytes are a magic string set to the bytes "HYLL".
  * "E" is one byte encoding, currently set to HLL_DENSE or
  * HLL_SPARSE. N/U are three not used bytes.
  *
+ * 存储最近的基数计算值，用于重用
  * The "Cardin." field is a 64 bit integer stored in little endian format
  * with the latest cardinality computed that can be reused if the data
  * structure was not modified since the last computation (this is useful
  * because there are high probabilities that HLLADD operations don't
  * modify the actual data structure and hence the approximated cardinality).
  *
+ * cached cardinality 里面存储最近计算的结构体
  * When the most significant bit in the most significant byte of the cached
  * cardinality is set, it means that the data structure was modified and
  * we can't reuse the cached value that must be recomputed.
@@ -89,7 +93,7 @@
  * ===
  *
  * The dense representation used by Redis is the following:
- *
+ * 密集表达式 使用如下的表示方式
  * +--------+--------+--------+------//      //--+
  * |11000000|22221111|33333322|55444444 ....     |
  * +--------+--------+--------+------//      //--+
@@ -99,7 +103,7 @@
  *
  * Sparse representation
  * ===
- *
+ * 稀疏 使用3个操作码
  * The sparse representation encodes registers using a run length
  * encoding composed of three opcodes, two using one byte, and one using
  * of two bytes. The opcodes are called ZERO, XZERO and VAL.
@@ -129,7 +133,7 @@
  * HLL is converted to the dense representation.
  *
  * The sparse representation is purely positional. For example a sparse
- * representation of an empty HLL is just: XZERO:16384.
+ * representation of an empty HLL is just: XZERO:16384. （01 111111  1111 1111）
  *
  * An HLL having only 3 non-zero registers at position 1000, 1020, 1021
  * respectively set to 2, 3, 3, is represented by the following three
@@ -145,7 +149,7 @@
  * of 12k in order to represent the HLL registers. In general for low
  * cardinality there is a big win in terms of space efficiency, traded
  * with CPU time since the sparse representation is slower to access:
- *
+ * 
  * The following table shows average cardinality vs bytes used, 100
  * samples per cardinality (when the set was not representable because
  * of registers with too big value, the dense representation size was used
@@ -170,8 +174,9 @@
  * 8000 9500
  * 9000 10088
  * 10000 10591
- *
- * The dense representation uses 12288 bytes, so there is a big win up to
+ * 
+ * 密集表达式使用12K的内存，所以大基数适合。
+ * The dense representation uses 12288 bytes(12K), so there is a big win up to
  * a cardinality of ~2000-3000. For bigger cardinalities the constant times
  * involved in updating the sparse representation is not justified by the
  * memory savings. The exact maximum length of the sparse representation
@@ -179,11 +184,12 @@
  * configured via the define server.hll_sparse_max_bytes.
  */
 
+// hyperloglog 头结构体
 struct hllhdr {
     char magic[4];      /* "HYLL" */
     uint8_t encoding;   /* HLL_DENSE or HLL_SPARSE. */
-    uint8_t notused[3]; /* Reserved for future use, must be zero. */
-    uint8_t card[8];    /* Cached cardinality, little endian. */
+    uint8_t notused[3]; /* Reserved for future use, must be zero. 预留长度,内存对齐 */
+    uint8_t card[8];    /* Cached cardinality, little endian. 缓存基数 */
     uint8_t registers[]; /* Data bytes. */
 };
 
@@ -191,25 +197,26 @@ struct hllhdr {
 #define HLL_INVALIDATE_CACHE(hdr) (hdr)->card[7] |= (1<<7)
 #define HLL_VALID_CACHE(hdr) (((hdr)->card[7] & (1<<7)) == 0)
 
-#define HLL_P 14 /* The greater is P, the smaller the error. */
+#define HLL_P 14 /* The greater is P, the smaller the error. P越大，错误越小，用于选择桶的bit数目 */
 #define HLL_Q (64-HLL_P) /* The number of bits of the hash value used for
                             determining the number of leading zeros. */
-#define HLL_REGISTERS (1<<HLL_P) /* With P=14, 16384 registers. */
+#define HLL_REGISTERS (1<<HLL_P) /* With P=14, 16384 registers. P对应的桶数量 */
 #define HLL_P_MASK (HLL_REGISTERS-1) /* Mask to index register. */
 #define HLL_BITS 6 /* Enough to count up to 63 leading zeroes. */
 #define HLL_REGISTER_MAX ((1<<HLL_BITS)-1)
 #define HLL_HDR_SIZE sizeof(struct hllhdr)
-#define HLL_DENSE_SIZE (HLL_HDR_SIZE+((HLL_REGISTERS*HLL_BITS+7)/8))
-#define HLL_DENSE 0 /* Dense encoding. */
-#define HLL_SPARSE 1 /* Sparse encoding. */
+#define HLL_DENSE_SIZE (HLL_HDR_SIZE+((HLL_REGISTERS*HLL_BITS+7)/8))        // 密集表达式 的大小
+#define HLL_DENSE 0 /* Dense encoding. 密集表达式编码 */
+#define HLL_SPARSE 1 /* Sparse encoding. 系数表达式编码 */
 #define HLL_RAW 255 /* Only used internally, never exposed. */
 #define HLL_MAX_ENCODING 1
 
+// static 静态文件作用域
 static char *invalid_hll_err = "-INVALIDOBJ Corrupted HLL object detected\r\n";
 
 /* =========================== Low level bit macros ========================= */
 
-/* Macros to access the dense representation.
+/* Macros to access the dense representation. 处理密集表达式的宏
  *
  * We need to get and set 6 bit counters in an array of 8 bit bytes.
  * We use macros to make sure the code is inlined since speed is critical
@@ -221,16 +228,16 @@ static char *invalid_hll_err = "-INVALIDOBJ Corrupted HLL object detected\r\n";
  * |11000000|22221111|33333322|55444444
  * +--------+--------+--------+------//
  *
- * Note: in the above representation the most significant bit (MSB)
+ * Note: in the above representation the most significant bit (MSB最高有效位)
  * of every byte is on the left. We start using bits from the LSB to MSB,
- * and so forth passing to the next byte.
+ * and so forth(向前) passing to the next byte.
  *
  * Example, we want to access to counter at pos = 1 ("111111" in the
  * illustration above).
  *
  * The index of the first byte b0 containing our data is:
  *
- *  b0 = 6 * pos / 8 = 0
+ *  b0 = 6 * pos / 8 = 0   找到索引
  *
  *   +--------+
  *   |11000000|  <- Our byte at b0
@@ -241,14 +248,14 @@ static char *invalid_hll_err = "-INVALIDOBJ Corrupted HLL object detected\r\n";
  *
  *  fb = 6 * pos % 8 -> 6
  *
- * Right shift b0 of 'fb' bits.
+ * Right shift b0 of 'fb' bits. 向右转化，将b0转化为fb
  *
  *   +--------+
  *   |11000000|  <- Initial value of b0
  *   |00000011|  <- After right shift of 6 pos.
  *   +--------+
  *
- * Left shift b1 of bits 8-fb bits (2 bits)
+ * Left shift b1 of bits 8-fb bits (2 bits) 向左转换b1
  *
  *   +--------+
  *   |22221111|  <- Initial value of b1
@@ -336,9 +343,11 @@ static char *invalid_hll_err = "-INVALIDOBJ Corrupted HLL object detected\r\n";
 
 /* Store the value of the register at position 'regnum' into variable 'target'.
  * 'p' is an array of unsigned bytes. */
+// 密集表达式获得register
+// HLL_BITS = 6
 #define HLL_DENSE_GET_REGISTER(target,p,regnum) do { \
     uint8_t *_p = (uint8_t*) p; \
-    unsigned long _byte = regnum*HLL_BITS/8; \
+    unsigned long _byte = regnum*HLL_BITS/8; \              
     unsigned long _fb = regnum*HLL_BITS&7; \
     unsigned long _fb8 = 8 - _fb; \
     unsigned long b0 = _p[_byte]; \
@@ -360,7 +369,8 @@ static char *invalid_hll_err = "-INVALIDOBJ Corrupted HLL object detected\r\n";
     _p[_byte+1] |= _v >> _fb8; \
 } while(0)
 
-/* Macros to access the sparse representation.
+/* 使用系数表达式的宏
+ * Macros to access the sparse representation. 
  * The macros parameter is expected to be an uint8_t pointer. */
 #define HLL_SPARSE_XZERO_BIT 0x40 /* 01xxxxxx */
 #define HLL_SPARSE_VAL_BIT 0x80 /* 1vvvvvxx */
@@ -375,24 +385,29 @@ static char *invalid_hll_err = "-INVALIDOBJ Corrupted HLL object detected\r\n";
 #define HLL_SPARSE_VAL_MAX_LEN 4
 #define HLL_SPARSE_ZERO_MAX_LEN 64
 #define HLL_SPARSE_XZERO_MAX_LEN 16384
+
 #define HLL_SPARSE_VAL_SET(p,val,len) do { \
     *(p) = (((val)-1)<<2|((len)-1))|HLL_SPARSE_VAL_BIT; \
 } while(0)
+
 #define HLL_SPARSE_ZERO_SET(p,len) do { \
     *(p) = (len)-1; \
 } while(0)
+
 #define HLL_SPARSE_XZERO_SET(p,len) do { \
     int _l = (len)-1; \
     *(p) = (_l>>8) | HLL_SPARSE_XZERO_BIT; \
     *((p)+1) = (_l&0xff); \
 } while(0)
+
 #define HLL_ALPHA_INF 0.721347520444481703680 /* constant for 0.5/ln(2) */
 
 /* ========================= HyperLogLog algorithm  ========================= */
 
-/* Our hash function is MurmurHash2, 64 bit version.
+/* 
+ * Our hash function is MurmurHash2, 64 bit version.
  * It was modified for Redis in order to provide the same result in
- * big and little endian archs (endian neutral). */
+ * big and little endian archs (endian neutral). 做了优化，不管是大端还是小端架构，都输出相同的结果（使用宏交换了位置而已） */
 uint64_t MurmurHash64A (const void * key, int len, unsigned int seed) {
     const uint64_t m = 0xc6a4a7935bd1e995;
     const int r = 47;
@@ -445,9 +460,11 @@ uint64_t MurmurHash64A (const void * key, int len, unsigned int seed) {
     return h;
 }
 
-/* Given a string element to add to the HyperLogLog, returns the length
+/* 传入一个字符串，经过hash后获得 010101 比特串，从右向左返回出现1的长度（伯努利实验）
+ * Given a string element to add to the HyperLogLog, returns the length
  * of the pattern 000..1 of the element hash. As a side effect 'regp' is
  * set to the register index this element hashes to. */
+// long *regp 作为一个副作用，用于指出当前元素应该注册的hash索引
 int hllPatLen(unsigned char *ele, size_t elesize, long *regp) {
     uint64_t hash, bit, index;
     int count;
@@ -464,11 +481,10 @@ int hllPatLen(unsigned char *ele, size_t elesize, long *regp) {
      * This may sound like inefficient, but actually in the average case
      * there are high probabilities to find a 1 after a few iterations. */
     hash = MurmurHash64A(ele,elesize,0xadc83b19ULL);
-    index = hash & HLL_P_MASK; /* Register index. */
-    hash >>= HLL_P; /* Remove bits used to address the register. */
-    hash |= ((uint64_t)1<<HLL_Q); /* Make sure the loop terminates
-                                     and count will be <= Q+1. */
-    bit = 1;
+    index = hash & HLL_P_MASK; /* Register index. 掩码与操作 11 1111 1111 1111 ; index获得当前该元素应该被插入的register的索引 */
+    hash >>= HLL_P; /* Remove bits used to address the register. 删除14位长度，14位长度用于选择register */
+    hash |= ((uint64_t)1<<HLL_Q); /* Make sure the loop terminates and count will be <= Q+1. 在从右向左数64-14=50的位置的bit置为1，防止返回的长度大于Q */
+    bit = 1;//比特位为1，不断向左移动获得伯努利实验长度
     count = 1; /* Initialized to 1 since we count the "00000...1" pattern. */
     while((hash & bit) == 0) {
         count++;
@@ -478,22 +494,28 @@ int hllPatLen(unsigned char *ele, size_t elesize, long *regp) {
     return count;
 }
 
-/* ================== Dense representation implementation  ================== */
+/* ================== Dense representation implementation 密集表达式的实现  ================== */
 
 /* Low level function to set the dense HLL register at 'index' to the
  * specified value if the current value is smaller than 'count'.
  *
- * 'registers' is expected to have room for HLL_REGISTERS plus an
+ * 'registers' is expected to have room for HLL_REGISTERS(桶数量) plus an
  * additional byte on the right. This requirement is met by sds strings
  * automatically since they are implicitly null terminated.
- *
+ * 
  * The function always succeed, however if as a result of the operation
  * the approximated cardinality changed, 1 is returned. Otherwise 0
  * is returned. */
+// registers 指向桶内存
+// index 表示需要注册的桶索引
+// count 表示在指定桶中要设置的最大长度
+// return 1 表示设置了新的最大长度
+// return 0 表示原来的长度更大
 int hllDenseSet(uint8_t *registers, long index, uint8_t count) {
     uint8_t oldcount;
 
     HLL_DENSE_GET_REGISTER(oldcount,registers,index);
+    // 判断新设置的长度是否大于原来的长度 （伯努利实验只需要保存最大的长度）
     if (count > oldcount) {
         HLL_DENSE_SET_REGISTER(registers,index,count);
         return 1;
@@ -502,32 +524,35 @@ int hllDenseSet(uint8_t *registers, long index, uint8_t count) {
     }
 }
 
-/* "Add" the element in the dense hyperloglog data structure.
+/* 开放的api ，往hyperloglog结构体中增加新的元素
+ * "Add" the element in the dense hyperloglog data structure.
  * Actually nothing is added, but the max 0 pattern counter of the subset
  * the element belongs to is incremented if needed.
  *
  * This is just a wrapper to hllDenseSet(), performing the hashing of the
- * element in order to retrieve the index and zero-run count. */
+ * element in order to retrieve(获得) the index and zero-run count. */
 int hllDenseAdd(uint8_t *registers, unsigned char *ele, size_t elesize) {
-    long index;
-    uint8_t count = hllPatLen(ele,elesize,&index);
+    long index;//保存要插入的桶的索引
+    uint8_t count = hllPatLen(ele,elesize,&index);//
     /* Update the register if this element produced a longer run of zeroes. */
     return hllDenseSet(registers,index,count);
 }
 
-/* Compute the register histogram in the dense representation. */
+/* Compute the register histogram in the dense representation. 计算密集表达式的统计直方图 */
+// int* reghisto 是一个数组，用于存储统计直方图信息
 void hllDenseRegHisto(uint8_t *registers, int* reghisto) {
     int j;
 
     /* Redis default is to use 16384 registers 6 bits each. The code works
      * with other values by modifying the defines, but for our target value
      * we take a faster path with unrolled loops. */
+    // 判断是否使用Redis默认的参数进行hyperloglog计算总数
     if (HLL_REGISTERS == 16384 && HLL_BITS == 6) {
         uint8_t *r = registers;
         unsigned long r0, r1, r2, r3, r4, r5, r6, r7, r8, r9,
                       r10, r11, r12, r13, r14, r15;
         for (j = 0; j < 1024; j++) {
-            /* Handle 16 registers per iteration. */
+            /* Handle 16 registers per iteration. 每次迭代处理16个register */
             r0 = r[0] & 63;
             r1 = (r[0] >> 6 | r[1] << 2) & 63;
             r2 = (r[1] >> 4 | r[2] << 4) & 63;
@@ -545,6 +570,7 @@ void hllDenseRegHisto(uint8_t *registers, int* reghisto) {
             r14 = (r[10] >> 4 | r[11] << 4) & 63;
             r15 = (r[11] >> 2) & 63;
 
+            // 根据每组不同的最大值作为索引，增加对应的数量
             reghisto[r0]++;
             reghisto[r1]++;
             reghisto[r2]++;
