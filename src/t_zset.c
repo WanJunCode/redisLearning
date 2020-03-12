@@ -180,32 +180,34 @@ zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
             rank[i] = 0;
             update[i] = zsl->header;
             // zsl->header->level[i].span = zsl->length
-            update[i]->level[i].span = zsl->length;
+            update[i]->level[i].span = zsl->length;//新增加的level的span是跳跃表中所有结点的数量
         }
         zsl->level = level;//更新跳跃表当前的level
     }
     // 创建一个跳跃表节点,level表示当前节点需要插入的层数，该节点的forward数组长度为level
     x = zslCreateNode(level,score,ele);
+    // 新创建节点x只会在0-level层中进行添加
     for (i = 0; i < level; i++) {
         // 将x节点插入到第i层的 update节点前
         x->level[i].forward = update[i]->level[i].forward;
         update[i]->level[i].forward = x;
 
         /* update span(层跨度) covered by update[i] as x is inserted here */
+        // rank[0]表示最底层的span长度
         x->level[i].span = update[i]->level[i].span - (rank[0] - rank[i]);
-        update[i]->level[i].span = (rank[0] - rank[i]) + 1;
+        update[i]->level[i].span = (rank[0] - rank[i]) + 1;//最底层等于rank[0]-rank[0]+1=1的长度
     }
 
     /* increment span for untouched levels */
     for (i = level; i < zsl->level; i++) {
-        update[i]->level[i].span++;
+        update[i]->level[i].span++;//新插入节点x的level之上的更新节点span都+1，因为都要跨过新结点x
     }
 
-    x->backward = (update[0] == zsl->header) ? NULL : update[0];
+    x->backward = (update[0] == zsl->header) ? NULL : update[0];//前向结点都是第一层的前一个结点
     if (x->level[0].forward)
-        x->level[0].forward->backward = x;
+        x->level[0].forward->backward = x;//如果插入结点在第一层上有后向结点，需要将后向结点的前向指针指向x
     else
-        zsl->tail = x;
+        zsl->tail = x;//新插入结点作为尾部结点
     zsl->length++;
     return x;
 }
@@ -240,10 +242,11 @@ void zslDeleteNode(zskiplist *zsl, zskiplistNode *x, zskiplistNode **update) {
  * so that it is possible for the caller to reuse the node (including the
  * referenced SDS string at node->ele). */
 int zslDelete(zskiplist *zsl, double score, sds ele, zskiplistNode **node) {
-    zskiplistNode *update[ZSKIPLIST_MAXLEVEL], *x;
+    zskiplistNode *update[ZSKIPLIST_MAXLEVEL], *x;//update记录需要删除结点的每层前序结点前序
     int i;
 
     x = zsl->header;
+    // 从最高层向下层遍历
     for (i = zsl->level-1; i >= 0; i--) {
         while (x->level[i].forward &&
                 (x->level[i].forward->score < score ||

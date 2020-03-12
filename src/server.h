@@ -865,16 +865,16 @@ struct sharedObjectsStruct {
 typedef struct zskiplistNode {
     sds ele;
     double score;
-    struct zskiplistNode *backward;//后退指针
+    struct zskiplistNode *backward;//后退指针，最底层的结点都会保留前向结点
     struct zskiplistLevel {
         struct zskiplistNode *forward;
-        unsigned long span;//代表该节点在每层到下一个节点所跨越的节点长度：层跨度
+        unsigned long span;//代表该节点在每层到下一个节点所跨越的节点长度；最底层跳跃表的跨越长度都是1
     } level[];//柔性数组
 } zskiplistNode;
 
 typedef struct zskiplist {
     struct zskiplistNode *header, *tail;
-    unsigned long length;
+    unsigned long length;//当前跳跃表中的结点数量
     int level;
 } zskiplist;
 
