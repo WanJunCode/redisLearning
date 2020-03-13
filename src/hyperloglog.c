@@ -710,7 +710,7 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
     first = 0;
     prev = NULL; /* Points to previous opcode at the end of the loop. */
     next = NULL; /* Points to the next opcode at the end of the loop. */
-    span = 0;
+    span = 0;//不是实际字节长度
     // 遍历整个稀疏表达式的register
     while(p < end) {
         long oplen;
@@ -736,6 +736,8 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
         p += oplen;
         first += span;
     }
+
+    // first----index-----span   [index有可能在first后，有可能等于first(span=1时 index <= first+1-1)]
     if (span == 0 || p >= end) return -1; /* Invalid format. */
 
     next = HLL_SPARSE_IS_XZERO(p) ? p+2 : p+1;
@@ -799,11 +801,14 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
     }
 
     /* D) General case. 最常见的例子
-     *
+     * 
+     * 另一个非常复杂的例子是：register需要进行更新，并且当前该register是VAL类型长度大于1，
+     * ZERO类型并且长度大于1，XZERO类型
      * The other cases are more complex: our register requires to be updated
      * and is either currently represented by a VAL opcode with len > 1,
      * by a ZERO opcode with len > 1, or by an XZERO opcode.
      *
+     * 在这种情况下，原来的opcode必须被分割成多个opcode。最坏的条件下会形成 XZERO - VAL - XZERO 的结构
      * In those cases the original opcode must be split into multiple
      * opcodes. The worst case is an XZERO split in the middle resuling into
      * XZERO - VAL - XZERO, so the resulting sequence max length is
@@ -813,23 +818,24 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
      * with 'newlen' as length. Later the new sequence is inserted in place
      * of the old one, possibly moving what is on the right a few bytes
      * if the new sequence is longer than the older one. */
-    uint8_t seq[5], *n = seq;
+    uint8_t seq[5], *n = seq;//指针n指向栈数组的起始地址seq，seq用于保存修改后的register
     int last = first+span-1; /* Last register covered by the sequence. */
     int len;
 
+    // 如果需要修改的register类型是 ZERO XZERO
     if (is_zero || is_xzero) {
         /* Handle splitting of ZERO / XZERO. */
         if (index != first) {
             len = index-first;
-            if (len > HLL_SPARSE_ZERO_MAX_LEN) {
-                HLL_SPARSE_XZERO_SET(n,len);
+            if (len > HLL_SPARSE_ZERO_MAX_LEN) {    // ZERO的长度最大为64
+                HLL_SPARSE_XZERO_SET(n,len);        // 设置n的前2字节为 XZERO 类型
                 n += 2;
             } else {
-                HLL_SPARSE_ZERO_SET(n,len);
+                HLL_SPARSE_ZERO_SET(n,len);         // 设置n的前1字节为 ZERO 类型
                 n++;
             }
         }
-        HLL_SPARSE_VAL_SET(n,count,1);
+        HLL_SPARSE_VAL_SET(n,count,1);              // 设置第二部分为 VAL 类型，占1字节
         n++;
         if (index != last) {
             len = last-index;
@@ -875,7 +881,7 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
      end += deltalen;
 
 updated:
-    /* Step 4: Merge adjacent values if possible.
+    /* Step 4: Merge adjacent(邻近的) values if possible. 尽可能合并邻近的值
      *
      * The representation was updated, however the resulting representation
      * may not be optimal: adjacent VAL opcodes can sometimes be merged into
