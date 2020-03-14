@@ -42,6 +42,7 @@
 #define INTSET_ENC_INT64 (sizeof(int64_t))
 
 /* Return the required encoding for the provided value. */
+// 根据传入值大小返回合适的 intset 类型
 static uint8_t _intsetValueEncoding(int64_t v) {
     if (v < INT32_MIN || v > INT32_MAX)
         return INTSET_ENC_INT64;
@@ -52,6 +53,7 @@ static uint8_t _intsetValueEncoding(int64_t v) {
 }
 
 /* Return the value at pos, given an encoding. */
+// 根据给定的编码类型enc和位置pos，返回在intset中的对应值
 static int64_t _intsetGetEncoded(intset *is, int pos, uint8_t enc) {
     int64_t v64;
     int32_t v32;
@@ -74,6 +76,7 @@ static int64_t _intsetGetEncoded(intset *is, int pos, uint8_t enc) {
 
 /* Return the value at pos, using the configured encoding. */
 static int64_t _intsetGet(intset *is, int pos) {
+    // 根据 intset 结构自带的编码类型 encoding 进行数值获取
     return _intsetGetEncoded(is,pos,intrev32ifbe(is->encoding));
 }
 

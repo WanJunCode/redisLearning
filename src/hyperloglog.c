@@ -187,7 +187,7 @@
 // hyperloglog 头结构体
 struct hllhdr {
     char magic[4];      /* "HYLL" */
-    uint8_t encoding;   /* HLL_DENSE or HLL_SPARSE. */
+    uint8_t encoding;   /* HLL_DENSE or HLL_SPARSE. 还有一种8bit的RAW */
     uint8_t notused[3]; /* Reserved for future use, must be zero. 预留长度,内存对齐 */
     uint8_t card[8];    /* Cached cardinality, little endian. 缓存基数 */
     uint8_t registers[]; /* Data bytes. 柔性数组*/
@@ -848,15 +848,17 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
             }
         }
     } else {
-        /* Handle splitting of VAL. */
-        int curval = HLL_SPARSE_VAL_VALUE(p);
+        /* Handle splitting of VAL. 分割VAL类型的 稀疏表达式 */
+        // n 指向数组 seq[5]
+        // [first--index--last]
+        int curval = HLL_SPARSE_VAL_VALUE(p);//获得当前值
 
         if (index != first) {
             len = index-first;
             HLL_SPARSE_VAL_SET(n,curval,len);
             n++;
         }
-        HLL_SPARSE_VAL_SET(n,count,1);
+        HLL_SPARSE_VAL_SET(n,count,1);//设置n当前所指向地址为count，并且长度为1
         n++;
         if (index != last) {
             len = last-index;
@@ -865,20 +867,22 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
         }
     }
 
-    /* Step 3: substitute the new sequence with the old one.
+    /* Step 3: substitute(替换) the new sequence with the old one.
      *
      * Note that we already allocated space on the sds string
      * calling sdsMakeRoomFor(). */
-     int seqlen = n-seq;
-     int oldlen = is_xzero ? 2 : 1;
-     int deltalen = seqlen-oldlen;
-    
-     if (deltalen > 0 &&
-         sdslen(o->ptr)+deltalen > server.hll_sparse_max_bytes) goto promote;
-     if (deltalen && next) memmove(next+deltalen,next,end-next);
-     sdsIncrLen(o->ptr,deltalen);
-     memcpy(p,seq,seqlen);
-     end += deltalen;
+    int seqlen = n-seq;
+    int oldlen = is_xzero ? 2 : 1;
+    int deltalen = seqlen-oldlen;
+
+    // 如果需要扩展稀疏表达式长度，并且即将达到最大值。进行密集表达式得转换
+    if (deltalen > 0 &&
+        sdslen(o->ptr)+deltalen > server.hll_sparse_max_bytes) goto promote;
+    // 需要扩展并且有足够空间，进行后续数据的移动
+    if (deltalen && next) memmove(next+deltalen,next,end-next);
+    sdsIncrLen(o->ptr,deltalen);//增加sds长度
+    memcpy(p,seq,seqlen);
+    end += deltalen;
 
 updated:
     /* Step 4: Merge adjacent(邻近的) values if possible. 尽可能合并邻近的值
@@ -887,20 +891,24 @@ updated:
      * may not be optimal: adjacent VAL opcodes can sometimes be merged into
      * a single one. */
     p = prev ? prev : sparse;
-    int scanlen = 5; /* Scan up to 5 upcodes starting from prev. */
+    int scanlen = 5; /* Scan up to 5 upcodes starting from prev. 最多扫描5个字节 */
     while (p < end && scanlen--) {
         if (HLL_SPARSE_IS_XZERO(p)) {
+            //如果是 XZERO 类型，偏移两个字节
             p += 2;
             continue;
         } else if (HLL_SPARSE_IS_ZERO(p)) {
+            //如果是 ZERO 类型，偏移一个字节
             p++;
             continue;
         }
-        /* We need two adjacent VAL opcodes to try a merge, having
+        /* We need two adjacent(合并) VAL opcodes to try a merge, having
          * the same value, and a len that fits the VAL opcode max len. */
         if (p+1 < end && HLL_SPARSE_IS_VAL(p+1)) {
+            // 获得连续两个 VAL 类型的值
             int v1 = HLL_SPARSE_VAL_VALUE(p);
             int v2 = HLL_SPARSE_VAL_VALUE(p+1);
+            // p 和 p+1 都是 VAL 类型并且其中 value 相等，可以合并为一个 VAL 类型并将重新设置len长度
             if (v1 == v2) {
                 int len = HLL_SPARSE_VAL_LEN(p)+HLL_SPARSE_VAL_LEN(p+1);
                 if (len <= HLL_SPARSE_VAL_MAX_LEN) {
@@ -920,7 +928,7 @@ updated:
 
     /* Invalidate the cached cardinality. */
     hdr = o->ptr;
-    HLL_INVALIDATE_CACHE(hdr);
+    HLL_INVALIDATE_CACHE(hdr);//将当前的缓存置为无效
     return 1;
 
 promote: /* Promote to dense representation. 升级为密集表达式 */
@@ -946,13 +954,14 @@ promote: /* Promote to dense representation. 升级为密集表达式 */
  * This function is actually a wrapper for hllSparseSet(), it only performs
  * the hashshing of the elmenet to obtain the index and zeros run length. */
 int hllSparseAdd(robj *o, unsigned char *ele, size_t elesize) {
+    // 对传入的字符串元素进行处理，获得需要设置的register索引index和需要设置的值count
     long index;
     uint8_t count = hllPatLen(ele,elesize,&index);
     /* Update the register if this element produced a longer run of zeroes. */
     return hllSparseSet(o,index,count);
 }
 
-/* Compute the register histogram in the sparse representation. */
+/* Compute the register histogram in the sparse representation. 计算稀疏表达式的 register 统计图 */
 void hllSparseRegHisto(uint8_t *sparse, int sparselen, int *invalid, int* reghisto) {
     int idx = 0, runlen, regval;
     uint8_t *end = sparse+sparselen, *p = sparse;
@@ -979,7 +988,7 @@ void hllSparseRegHisto(uint8_t *sparse, int sparselen, int *invalid, int* reghis
     if (idx != HLL_REGISTERS && invalid) *invalid = 1;
 }
 
-/* ========================= HyperLogLog Count ==============================
+/* ========================= HyperLogLog Count 统计 ==============================
  * This is the core of the algorithm where the approximated count is computed.
  * The function uses the lower level hllDenseRegHisto() and hllSparseRegHisto()
  * functions as helpers to compute histogram of register values part of the
@@ -992,6 +1001,7 @@ void hllRawRegHisto(uint8_t *registers, int* reghisto) {
     uint8_t *bytes;
     int j;
 
+    // 遍历所有的
     for (j = 0; j < HLL_REGISTERS/8; j++) {
         if (*word == 0) {
             reghisto[0] += 8;
@@ -1044,13 +1054,14 @@ double hllTau(double x) {
     return z / 3;
 }
 
-/* Return the approximated cardinality of the set based on the harmonic
+/* Return the approximated cardinality(基数) of the set based on the harmonic
  * mean of the registers values. 'hdr' points to the start of the SDS
  * representing the String object holding the HLL representation.
  *
  * If the sparse representation of the HLL object is not valid, the integer
  * pointed by 'invalid' is set to non-zero, otherwise it is left untouched.
- *
+ * 
+ * 支持一种内部唯一的编码格式 HLL_RAW，使用uint8_t结构，用于加速 PFCOUNT 指令
  * hllCount() supports a special internal-only encoding of HLL_RAW, that
  * is, hdr->registers will point to an uint8_t array of HLL_REGISTERS element.
  * This is useful in order to speedup PFCOUNT when called against multiple
@@ -1068,12 +1079,12 @@ uint64_t hllCount(struct hllhdr *hdr, int *invalid) {
 
     /* Compute register histogram */
     if (hdr->encoding == HLL_DENSE) {
-        hllDenseRegHisto(hdr->registers,reghisto);
+        hllDenseRegHisto(hdr->registers,reghisto);//内部使用6bit进行统计
     } else if (hdr->encoding == HLL_SPARSE) {
         hllSparseRegHisto(hdr->registers,
                          sdslen((sds)hdr)-HLL_HDR_SIZE,invalid,reghisto);
     } else if (hdr->encoding == HLL_RAW) {
-        hllRawRegHisto(hdr->registers,reghisto);
+        hllRawRegHisto(hdr->registers,reghisto);//内部使用8bit进行统计
     } else {
         serverPanic("Unknown HyperLogLog encoding in hllCount()");
     }
@@ -1092,7 +1103,7 @@ uint64_t hllCount(struct hllhdr *hdr, int *invalid) {
     return (uint64_t) E;
 }
 
-/* Call hllDenseAdd() or hllSparseAdd() according to the HLL encoding. */
+/* Call hllDenseAdd() or hllSparseAdd() according to the HLL encoding. 向HLL结构体中添加一个元素，内部封装两种实现 */
 int hllAdd(robj *o, unsigned char *ele, size_t elesize) {
     struct hllhdr *hdr = o->ptr;
     switch(hdr->encoding) {
@@ -1102,7 +1113,8 @@ int hllAdd(robj *o, unsigned char *ele, size_t elesize) {
     }
 }
 
-/* Merge by computing MAX(registers[i],hll[i]) the HyperLogLog 'hll'
+/* 将密集表达式、稀疏表达式合并到uint8_t编码的 max 数组指针中去
+ * Merge by computing MAX(registers[i],hll[i]) the HyperLogLog 'hll'
  * with an array of uint8_t HLL_REGISTERS registers pointed by 'max'.
  *
  * The hll object must be already validated via isHLLObjectOrReply()
@@ -1117,6 +1129,7 @@ int hllMerge(uint8_t *max, robj *hll) {
     if (hdr->encoding == HLL_DENSE) {
         uint8_t val;
 
+        // 遍历 密集表达式 ，将每个register的最大值保存在max中
         for (i = 0; i < HLL_REGISTERS; i++) {
             HLL_DENSE_GET_REGISTER(val,hdr->registers,i);
             if (val > max[i]) max[i] = val;
@@ -1232,7 +1245,7 @@ void pfaddCommand(client *c) {
         /* Create the key with a string value of the exact length to
          * hold our HLL data structure. sdsnewlen() when NULL is passed
          * is guaranteed to return bytes initialized to zero. */
-        o = createHLLObject();
+        o = createHLLObject();//创建一个 HLL 结构体
         dbAdd(c->db,c->argv[1],o);
         updated++;
     } else {

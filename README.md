@@ -1,6 +1,9 @@
 # redisLearning
 
 
+
+阅读Redis的数据结构部分
+
 2020/3/6
 sds.h  动态字符串
 adlist.h 双向链表
@@ -15,3 +18,10 @@ server.h t_zset.c 跳跃表部分
 2020/3/12 完成跳跃表，插入，删除操作
 
 hyperloglog.c  理论学习
+
+2020/3/14 完成hyperloglog.c 部分
+
+熟悉Redis的内存编码结构 
++ 整数集合数据结构 intset.h和intset.c 
++ 压缩列表数据结构 ziplist.h和ziplist.c
+
