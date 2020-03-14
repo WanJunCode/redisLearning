@@ -28,6 +28,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+// 压缩列表
 #ifndef _ZIPLIST_H
 #define _ZIPLIST_H
 

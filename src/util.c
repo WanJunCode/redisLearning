@@ -345,7 +345,9 @@ int ll2string(char *dst, size_t dstlen, long long svalue) {
     return length;
 }
 
-/* Convert a string into a long long. Returns 1 if the string could be parsed
+/* 将一个字符串转化为long long类型，参数value接收转化后的值
+ * return 1 表示可以进行转化
+ * Convert a string into a long long. Returns 1 if the string could be parsed
  * into a (non-overflowing) long long, 0 otherwise. The value will be set to
  * the parsed value when appropriate.
  *
@@ -354,9 +356,10 @@ int ll2string(char *dst, size_t dstlen, long long svalue) {
  * representing the number are accepted, nor zeroes at the start if not
  * for the string "0" representing the zero number.
  *
- * Because of its strictness, it is safe to use this function to check if
+ * Because of its strictness(严格的), it is safe to use this function to check if
  * you can convert a string into a long long, and obtain back the string
  * from the number without any loss in the string representation. */
+// long long *value 作为接收参数
 int string2ll(const char *s, size_t slen, long long *value) {
     const char *p = s;
     size_t plen = 0;

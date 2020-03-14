@@ -1,14 +1,14 @@
-/* The ziplist is a specially encoded dually linked list that is designed
- * to be very memory efficient. It stores both strings and integer values,
+/* The ziplist is a specially encoded dually(重复的) linked list that is designed
+ * to be very memory efficient(节省内存). It stores both strings and integer values,
  * where integers are encoded as actual integers instead of a series of
  * characters. It allows push and pop operations on either side of the list
- * in O(1) time. However, because every operation requires a reallocation of
- * the memory used by the ziplist, the actual complexity is related to the
+ * in O(1) time. However, because every operation requires a reallocation(重新分配) of
+ * the memory used by the ziplist, the actual complexity(复杂度) is related to the
  * amount of memory used by the ziplist.
  *
  * ----------------------------------------------------------------------------
  *
- * ZIPLIST OVERALL LAYOUT
+ * ZIPLIST OVERALL LAYOUT 压缩列表的整体架构
  * ======================
  *
  * The general layout of the ziplist is as follows:
@@ -17,26 +17,31 @@
  *
  * NOTE: all fields are stored in little endian, if not specified otherwise.
  *
+ * zlbytes 表示压缩列表的整体字节数量
  * <uint32_t zlbytes> is an unsigned integer to hold the number of bytes that
- * the ziplist occupies, including the four bytes of the zlbytes field itself.
+ * the ziplist occupies(占有), including the four bytes of the zlbytes field itself.
  * This value needs to be stored to be able to resize the entire structure
  * without the need to traverse it first.
- *
+ * 
+ * zltail 表示到尾端的偏移量，避免遍历
  * <uint32_t zltail> is the offset to the last entry in the list. This allows
  * a pop operation on the far side of the list without the need for full
  * traversal.
  *
+ * zllen 表示entry的数量，如果数量大于2^16-2,也只能设置为2^16-1
  * <uint16_t zllen> is the number of entries. When there are more than
  * 2^16-2 entries, this value is set to 2^16-1 and we need to traverse the
  * entire list to know how many items it holds.
  *
+ * zlend 是指定的尾部entry
  * <uint8_t zlend> is a special entry representing the end of the ziplist.
  * Is encoded as a single byte equal to 255. No other normal entry starts
  * with a byte set to the value of 255.
  *
- * ZIPLIST ENTRIES
+ * ZIPLIST ENTRIES 压缩列表的元素entry
  * ===============
- *
+ * 
+ * 每个元素entry都有一个前缀元数据：前一个entry的长度(用于从后向前遍历)，当前元素的编码encoding(表示当前元素的类型int\string)
  * Every entry in the ziplist is prefixed by metadata that contains two pieces
  * of information. First, the length of the previous entry is stored to be
  * able to traverse the list from back to front. Second, the entry encoding is
@@ -45,13 +50,16 @@
  * So a complete entry is stored like this:
  *
  * <prevlen> <encoding> <entry-data>
- *
+ * 
+ * 有时候encoding编码就是这个元素本身
  * Sometimes the encoding represents the entry itself, like for small integers
  * as we'll see later. In such a case the <entry-data> part is missing, and we
  * could have just:
  *
  * <prevlen> <encoding>
- *
+ * 
+ * 前一个元素entry的长度如果小于254byte，使用一个字节uint8_t表示.如果超过254，使用两个字节来表示，但是第一个byte设置为FE来标志，
+ * 剩余的4个字节用来表示之前的元素entry长度
  * The length of the previous entry, <prevlen>, is encoded in the following way:
  * If this length is smaller than 254 bytes, it will only consume a single
  * byte representing the length as an unsinged 8 bit integer. When the length
@@ -76,19 +84,20 @@
  * what kind of integer will be stored after this header. An overview of the
  * different types and encodings is as follows. The first byte is always enough
  * to determine the kind of entry.
- *
+ * 
+ * 网络字节序是大端字节序
  * |00pppppp| - 1 byte
  *      String value with length less than or equal to 63 bytes (6 bits).
  *      "pppppp" represents the unsigned 6 bit length.
  * |01pppppp|qqqqqqqq| - 2 bytes
  *      String value with length less than or equal to 16383 bytes (14 bits).
- *      IMPORTANT: The 14 bit number is stored in big endian.
+ *      IMPORTANT: The 14 bit number is stored in big endian.(14bit的数字必须以大端存储)
  * |10000000|qqqqqqqq|rrrrrrrr|ssssssss|tttttttt| - 5 bytes
  *      String value with length greater than or equal to 16384 bytes.
  *      Only the 4 bytes following the first byte represents the length
  *      up to 32^2-1. The 6 lower bits of the first byte are not used and
  *      are set to zero.
- *      IMPORTANT: The 32 bit number is stored in big endian.
+ *      IMPORTANT: The 32 bit number is stored in big endian.(32bit的数字必须以大端存储)
  * |11000000| - 3 bytes
  *      Integer encoded as int16_t (2 bytes).
  * |11010000| - 5 bytes
@@ -105,6 +114,7 @@
  *      subtracted from the encoded 4 bit value to obtain the right value.
  * |11111111| - End of ziplist special entry.
  *
+ * 压缩列表头和所有的intergers都是用小端
  * Like for the ziplist header, all the integers are represented in little
  * endian byte order, even when this code is compiled in big endian systems.
  *
@@ -129,9 +139,9 @@
  * composed of the previous entry length, which is zero because this is
  * our first entry, and the byte F3 which corresponds to the encoding
  * |1111xxxx| with xxxx between 0001 and 1101. We need to remove the "F"
- * higher order bits 1111, and subtract 1 from the "3", so the entry value
+ * higher order bits 1111, and subtract(减去) 1 from the "3", so the entry value
  * is "2". The next entry has a prevlen of 02, since the first entry is
- * composed of exactly two bytes. The entry itself, F6, is encoded exactly
+ * composed(组成) of exactly two bytes. The entry itself, F6, is encoded exactly
  * like the first entry, and 6-1 = 5, so the value of the entry is 5.
  * Finally the special entry FF signals the end of the ziplist.
  *
@@ -190,7 +200,7 @@
 #include "endianconv.h"
 #include "redisassert.h"
 
-#define ZIP_END 255         /* Special "end of ziplist" entry. */
+#define ZIP_END 255         /* Special "end of ziplist" entry. binary as 1111 1111 */
 #define ZIP_BIG_PREVLEN 254 /* Max number of bytes of the previous entry, for
                                the "prevlen" field prefixing each entry, to be
                                represented with just a single byte. Otherwise
@@ -198,9 +208,9 @@
                                AA BB CC DD are a 4 bytes unsigned integer
                                representing the previous entry len. */
 
-/* Different encoding/length possibilities */
-#define ZIP_STR_MASK 0xc0
-#define ZIP_INT_MASK 0x30
+/* Different encoding/length possibilities 不同的编码/长度可能 */
+#define ZIP_STR_MASK 0xc0       // 1100 0000
+#define ZIP_INT_MASK 0x30       // 0011 0000    int都以 11xx xxxx 开始
 #define ZIP_STR_06B (0 << 6)
 #define ZIP_STR_14B (1 << 6)
 #define ZIP_STR_32B (2 << 6)
@@ -210,7 +220,7 @@
 #define ZIP_INT_24B (0xc0 | 3<<4)
 #define ZIP_INT_8B 0xfe
 
-/* 4 bit integer immediate encoding |1111xxxx| with xxxx between
+/* 4 bit integer immediate(紧密的) encoding |1111xxxx| with xxxx between
  * 0001 and 1101. */
 #define ZIP_INT_IMM_MASK 0x0f   /* Mask to extract the 4 bits value. To add
                                    one is needed to reconstruct the value. */
@@ -221,41 +231,43 @@
 #define INT24_MIN (-INT24_MAX - 1)
 
 /* Macro to determine if the entry is a string. String entries never start
- * with "11" as most significant bits of the first byte. */
+ * with "11" as most significant bits(MSB最高可用位) of the first byte. */
 #define ZIP_IS_STR(enc) (((enc) & ZIP_STR_MASK) < ZIP_STR_MASK)
 
 /* Utility macros.*/
 
-/* Return total bytes a ziplist is composed of. */
+/* Return total bytes a ziplist is composed of. 返回一个压缩列表的总字节长度 */
 #define ZIPLIST_BYTES(zl)       (*((uint32_t*)(zl)))
 
-/* Return the offset of the last item inside the ziplist. */
+/* Return the offset of the last item inside the ziplist. 返回一个压缩列表最后项的偏移长度 */
 #define ZIPLIST_TAIL_OFFSET(zl) (*((uint32_t*)((zl)+sizeof(uint32_t))))
 
 /* Return the length of a ziplist, or UINT16_MAX if the length cannot be
- * determined without scanning the whole ziplist. */
+ * determined without scanning the whole ziplist. 返回压缩列表的数量，如果超过UINT16_MAX最大值则需要扫描整个列表 */
 #define ZIPLIST_LENGTH(zl)      (*((uint16_t*)((zl)+sizeof(uint32_t)*2)))
 
-/* The size of a ziplist header: two 32 bit integers for the total
+/* 返回整个压缩列表头的长度
+ * The size of a ziplist header: two 32 bit integers for the total
  * bytes count and last item offset. One 16 bit integer for the number
  * of items field. */
 #define ZIPLIST_HEADER_SIZE     (sizeof(uint32_t)*2+sizeof(uint16_t))
 
-/* Size of the "end of ziplist" entry. Just one byte. */
+/* Size of the "end of ziplist" entry. Just one byte. 压缩列表最后项的长度 */
 #define ZIPLIST_END_SIZE        (sizeof(uint8_t))
 
-/* Return the pointer to the first entry of a ziplist. */
+/* Return the pointer to the first entry of a ziplist. 获得压缩列表第一项的指针地址 */
 #define ZIPLIST_ENTRY_HEAD(zl)  ((zl)+ZIPLIST_HEADER_SIZE)
 
 /* Return the pointer to the last entry of a ziplist, using the
- * last entry offset inside the ziplist header. */
+ * last entry offset inside the ziplist header. 获得压缩列表最后一项的指针地址 */
 #define ZIPLIST_ENTRY_TAIL(zl)  ((zl)+intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl)))
 
 /* Return the pointer to the last byte of a ziplist, which is, the
- * end of ziplist FF entry. */
+ * end of ziplist FF entry. 获得压缩列表最后一个byte的指针地址 */
 #define ZIPLIST_ENTRY_END(zl)   ((zl)+intrev32ifbe(ZIPLIST_BYTES(zl))-1)
 
-/* Increment the number of items field in the ziplist header. Note that this
+/* 增加压缩列表中元素的数量 incr ，注意不要超过UINT16_MAX
+ * Increment the number of items field in the ziplist header. Note that this
  * macro should never overflow the unsigned 16 bit integer, since entries are
  * always pushed one at a time. When UINT16_MAX is reached we want the count
  * to stay there to signal that a full scan is needed to get the number of
@@ -265,29 +277,34 @@
         ZIPLIST_LENGTH(zl) = intrev16ifbe(intrev16ifbe(ZIPLIST_LENGTH(zl))+incr); \
 }
 
-/* We use this function to receive information about a ziplist entry.
+/* 使用该函数去获得 压缩列表的信息
+ * We use this function to receive information about a ziplist entry.
  * Note that this is not how the data is actually encoded, is just what we
  * get filled by a function in order to operate more easily. */
+// 压缩列表节点信息
 typedef struct zlentry {
-    unsigned int prevrawlensize; /* Bytes used to encode the previous entry len*/
-    unsigned int prevrawlen;     /* Previous entry len. */
-    unsigned int lensize;        /* Bytes used to encode this entry type/len.
+    unsigned int prevrawlensize; /* Bytes used to encode the previous entry len 编码上一个元素长度的字节数 */
+    unsigned int prevrawlen;     /* Previous entry len. 上一个元素长度 */
+    unsigned int lensize;        /* 用于编码元素长度的字节数
+                                    Bytes used to encode this entry type/len.
                                     For example strings have a 1, 2 or 5 bytes
                                     header. Integers always use a single byte.*/
-    unsigned int len;            /* Bytes used to represent the actual entry.
+    unsigned int len;            /* 元素实际字节长度
+                                    Bytes used to represent the actual entry.
                                     For strings this is just the string length
                                     while for integers it is 1, 2, 3, 4, 8 or
                                     0 (for 4 bit immediate) depending on the
                                     number range. */
-    unsigned int headersize;     /* prevrawlensize + lensize. */
+    unsigned int headersize;     /* prevrawlensize + lensize. 元素头长度 */
     unsigned char encoding;      /* Set to ZIP_STR_* or ZIP_INT_* depending on
                                     the entry encoding. However for 4 bits
                                     immediate integers this can assume a range
                                     of values and must be range-checked. */
-    unsigned char *p;            /* Pointer to the very start of the entry, that
+    unsigned char *p;            /* Pointer to the very(恰好的) start of the entry, that
                                     is, this points to prev-entry-len field. */
 } zlentry;
 
+// 初始化压缩列表结点
 #define ZIPLIST_ENTRY_ZERO(zle) { \
     (zle)->prevrawlensize = (zle)->prevrawlen = 0; \
     (zle)->lensize = (zle)->len = (zle)->headersize = 0; \
@@ -295,7 +312,8 @@ typedef struct zlentry {
     (zle)->p = NULL; \
 }
 
-/* Extract the encoding from the byte pointed by 'ptr' and set it into
+/* 提取压缩列表结点的编码地址并设置为 encoding 类型
+ * Extract the encoding from the byte pointed by 'ptr' and set it into
  * 'encoding' field of the zlentry structure. */
 #define ZIP_ENTRY_ENCODING(ptr, encoding) do {  \
     (encoding) = (ptr[0]); \
@@ -303,6 +321,7 @@ typedef struct zlentry {
 } while(0)
 
 /* Return bytes needed to store integer encoded by 'encoding'. */
+// 根据传入的编码类型，返回需要的字节长度
 unsigned int zipIntSize(unsigned char encoding) {
     switch(encoding) {
     case ZIP_INT_8B:  return 1;
@@ -325,34 +344,36 @@ unsigned int zipIntSize(unsigned char encoding) {
  * for single-byte small immediate integers.
  *
  * 'rawlen' is only used for ZIP_STR_* encodings and is the length of the
- * srting that this entry represents.
+ * srting that this entry represents. 表示字符串的实际长度
  *
  * The function returns the number of bytes used by the encoding/length
- * header stored in 'p'. */
+ * header stored in 'p'. 返回结点中encoding/length的字节长度 */
 unsigned int zipStoreEntryEncoding(unsigned char *p, unsigned char encoding, unsigned int rawlen) {
     unsigned char len = 1, buf[5];
 
+    // 0xc0 = 1100 0000 ， 不等于0xc0即不是int类型
     if (ZIP_IS_STR(encoding)) {
         /* Although encoding is given it may not be set for strings,
          * so we determine it here using the raw length. */
-        if (rawlen <= 0x3f) {
+        if (rawlen <= 0x3f) {//63
             if (!p) return len;
-            buf[0] = ZIP_STR_06B | rawlen;
-        } else if (rawlen <= 0x3fff) {
+            buf[0] = ZIP_STR_06B | rawlen;// 00xx xxxx
+        } else if (rawlen <= 0x3fff) {//16383
             len += 1;
             if (!p) return len;
-            buf[0] = ZIP_STR_14B | ((rawlen >> 8) & 0x3f);
-            buf[1] = rawlen & 0xff;
+            buf[0] = ZIP_STR_14B | ((rawlen >> 8) & 0x3f);// 01xx xxxx 保存第一个字节的数值
+            buf[1] = rawlen & 0xff;// 1111 1111 保存第二个字节的数值
         } else {
             len += 4;
             if (!p) return len;
-            buf[0] = ZIP_STR_32B;
+            buf[0] = ZIP_STR_32B;// 1100 0000 标志32bit长度的字符串
             buf[1] = (rawlen >> 24) & 0xff;
             buf[2] = (rawlen >> 16) & 0xff;
             buf[3] = (rawlen >> 8) & 0xff;
             buf[4] = rawlen & 0xff;
         }
     } else {
+        // 不是string类型
         /* Implies integer encoding, so length is always 1. */
         if (!p) return len;
         buf[0] = encoding;
@@ -363,11 +384,15 @@ unsigned int zipStoreEntryEncoding(unsigned char *p, unsigned char encoding, uns
     return len;
 }
 
-/* Decode the entry encoding type and data length (string length for strings,
+/* 解码结点的编码类型encoding和数据长度length
+ * Decode the entry encoding type and data length (string length for strings,
  * number of bytes used for the integer for integer entries) encoded in 'ptr'.
  * The 'encoding' variable will hold the entry encoding, the 'lensize'
  * variable will hold the number of bytes required to encode the entry
  * length, and the 'len' variable will hold the entry length. */
+// encoding, lensize, len 接收返回值
+// lensize 存储编码长度
+// len 存储int实际值，str长度
 #define ZIP_DECODE_LENGTH(ptr, encoding, lensize, len) do {                    \
     ZIP_ENTRY_ENCODING((ptr), (encoding));                                     \
     if ((encoding) < ZIP_STR_MASK) {                                           \
@@ -392,7 +417,8 @@ unsigned int zipStoreEntryEncoding(unsigned char *p, unsigned char encoding, uns
     }                                                                          \
 } while(0);
 
-/* Encode the length of the previous entry and write it to "p". This only
+/* 存储超大的上一个结点长度为len
+ * Encode the length of the previous entry and write it to "p". This only
  * uses the larger encoding (required in __ziplistCascadeUpdate). */
 int zipStorePrevEntryLengthLarge(unsigned char *p, unsigned int len) {
     if (p != NULL) {
@@ -403,13 +429,14 @@ int zipStorePrevEntryLengthLarge(unsigned char *p, unsigned int len) {
     return 1+sizeof(len);
 }
 
-/* Encode the length of the previous entry and write it to "p". Return the
+/* len表示数据长度，将该长度写入上一个元素entry中，返回需要写入的字节大小
+ * Encode the length of the previous entry and write it to "p". Return the
  * number of bytes needed to encode this length if "p" is NULL. */
 unsigned int zipStorePrevEntryLength(unsigned char *p, unsigned int len) {
     if (p == NULL) {
         return (len < ZIP_BIG_PREVLEN) ? 1 : sizeof(len)+1;
     } else {
-        if (len < ZIP_BIG_PREVLEN) {
+        if (len < ZIP_BIG_PREVLEN) {//254
             p[0] = len;
             return 1;
         } else {
@@ -418,7 +445,8 @@ unsigned int zipStorePrevEntryLength(unsigned char *p, unsigned int len) {
     }
 }
 
-/* Return the number of bytes used to encode the length of the previous
+/* 返回用于存储上一个结点长度的字节长度，并赋值给prevlensize
+ * Return the number of bytes used to encode the length of the previous
  * entry. The length is returned by setting the var 'prevlensize'. */
 #define ZIP_DECODE_PREVLENSIZE(ptr, prevlensize) do {                          \
     if ((ptr)[0] < ZIP_BIG_PREVLEN) {                                          \
@@ -428,7 +456,8 @@ unsigned int zipStorePrevEntryLength(unsigned char *p, unsigned int len) {
     }                                                                          \
 } while(0);
 
-/* Return the length of the previous element, and the number of bytes that
+/* 获得用于存储上一个结点长度的编码字节长度prevlensize，长度prevlen
+ * Return the length of the previous element, and the number of bytes that
  * are used in order to encode the previous element length.
  * 'ptr' must point to the prevlen prefix of an entry (that encodes the
  * length of the previous entry in order to navigate the elements backward).
@@ -461,29 +490,37 @@ unsigned int zipStorePrevEntryLength(unsigned char *p, unsigned int len) {
  * So the function returns a positive number if more space is needed,
  * a negative number if less space is needed, or zero if the same space
  * is needed. */
+// 返回值如果大于0，表示如果要将上一个元素改变为len长度需要增加内存长度
+// 返回值等于0，表示相同的长度
+// 返回值小于0，表示需要减少内存长度
 int zipPrevLenByteDiff(unsigned char *p, unsigned int len) {
     unsigned int prevlensize;
     ZIP_DECODE_PREVLENSIZE(p, prevlensize);
+    // 获得len长度需要写入的字节大小，与现在prev结点的大小进行比较
     return zipStorePrevEntryLength(NULL, len) - prevlensize;
 }
 
 /* Return the total number of bytes used by the entry pointed to by 'p'. */
+// 返回p指向的结点总共占的字节byte大小
 unsigned int zipRawEntryLength(unsigned char *p) {
     unsigned int prevlensize, encoding, lensize, len;
     ZIP_DECODE_PREVLENSIZE(p, prevlensize);
+    // encoding, lensize, len 接收返回值
     ZIP_DECODE_LENGTH(p + prevlensize, encoding, lensize, len);
     return prevlensize + lensize + len;
 }
 
-/* Check if string pointed to by 'entry' can be encoded as an integer.
+/* 尝试将指向string类型的entry编码为integer
+ * Check if string pointed to by 'entry' can be encoded as an integer.
  * Stores the integer value in 'v' and its encoding in 'encoding'. */
 int zipTryEncoding(unsigned char *entry, unsigned int entrylen, long long *v, unsigned char *encoding) {
     long long value;
 
     if (entrylen >= 32 || entrylen == 0) return 0;
+    // 尝试将字符串转化为long long类型并存储在value
     if (string2ll((char*)entry,entrylen,&value)) {
         /* Great, the string can be encoded. Check what's the smallest
-         * of our encoding types that can hold this value. */
+         * of our encoding types that can hold this value. 如果可以转化，我们选择占内存最小的编码方式encoding */
         if (value >= 0 && value <= 12) {
             *encoding = ZIP_INT_IMM_MIN+value;
         } else if (value >= INT8_MIN && value <= INT8_MAX) {
@@ -497,6 +534,7 @@ int zipTryEncoding(unsigned char *entry, unsigned int entrylen, long long *v, un
         } else {
             *encoding = ZIP_INT_64B;
         }
+        // 获得转化后的数值
         *v = value;
         return 1;
     }
@@ -504,6 +542,7 @@ int zipTryEncoding(unsigned char *entry, unsigned int entrylen, long long *v, un
 }
 
 /* Store integer 'value' at 'p', encoded as 'encoding' */
+// 使用encoding编码方式将value存储在p中
 void zipSaveInteger(unsigned char *p, int64_t value, unsigned char encoding) {
     int16_t i16;
     int32_t i32;
@@ -533,7 +572,8 @@ void zipSaveInteger(unsigned char *p, int64_t value, unsigned char encoding) {
     }
 }
 
-/* Read integer encoded as 'encoding' from 'p' */
+/* Read integer encoded as 'encoding' from 'p' 使用encoding编码方式从p读取一个integer */
+// 读取和存入数值都要进行大端系统的判断，如果是大端系统需要转换
 int64_t zipLoadInteger(unsigned char *p, unsigned char encoding) {
     int16_t i16;
     int32_t i32;
@@ -565,7 +605,7 @@ int64_t zipLoadInteger(unsigned char *p, unsigned char encoding) {
     return ret;
 }
 
-/* Return a struct with all information about an entry. */
+/* Return a struct with all information about an entry. 返回一个压缩列表节点的信息 */
 void zipEntry(unsigned char *p, zlentry *e) {
 
     ZIP_DECODE_PREVLEN(p, e->prevrawlensize, e->prevrawlen);
@@ -574,18 +614,18 @@ void zipEntry(unsigned char *p, zlentry *e) {
     e->p = p;
 }
 
-/* Create a new empty ziplist. */
+/* Create a new empty ziplist. 创建一个新的压缩列表 */
 unsigned char *ziplistNew(void) {
     unsigned int bytes = ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE;
     unsigned char *zl = zmalloc(bytes);
-    ZIPLIST_BYTES(zl) = intrev32ifbe(bytes);
-    ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(ZIPLIST_HEADER_SIZE);
-    ZIPLIST_LENGTH(zl) = 0;
-    zl[bytes-1] = ZIP_END;
+    ZIPLIST_BYTES(zl) = intrev32ifbe(bytes);//存储整个结构体长度
+    ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(ZIPLIST_HEADER_SIZE);//存储最后一项偏移位置
+    ZIPLIST_LENGTH(zl) = 0;//节点数量为0
+    zl[bytes-1] = ZIP_END;//设置列表尾 255(binary:1111 1111)
     return zl;
 }
 
-/* Resize the ziplist. */
+/* Resize the ziplist. 重新设置压缩列表的大小(重新开辟内存) */
 unsigned char *ziplistResize(unsigned char *zl, unsigned int len) {
     zl = zrealloc(zl,len);
     ZIPLIST_BYTES(zl) = intrev32ifbe(len);
@@ -593,20 +633,21 @@ unsigned char *ziplistResize(unsigned char *zl, unsigned int len) {
     return zl;
 }
 
-/* When an entry is inserted, we need to set the prevlen field of the next
+/* 当一个新的元素entry被插入，我们需要设置next节点的prevlen字段
+ * When an entry is inserted, we need to set the prevlen field of the next
  * entry to equal the length of the inserted entry. It can occur that this
  * length cannot be encoded in 1 byte and the next entry needs to be grow
  * a bit larger to hold the 5-byte encoded prevlen. This can be done for free,
  * because this only happens when an entry is already being inserted (which
  * causes a realloc and memmove). However, encoding the prevlen may require
- * that this entry is grown as well. This effect may cascade throughout
- * the ziplist when there are consecutive entries with a size close to
+ * that this entry is grown as well. This effect may cascade(连锁) throughout(贯穿)
+ * the ziplist when there are consecutive(连续的) entries with a size close to
  * ZIP_BIG_PREVLEN, so we need to check that the prevlen can be encoded in
  * every consecutive entry.
  *
  * Note that this effect can also happen in reverse, where the bytes required
  * to encode the prevlen field can shrink. This effect is deliberately ignored,
- * because it can cause a "flapping" effect where a chain prevlen fields is
+ * because it can cause a "flapping"(摆动) effect where a chain prevlen fields is
  * first grown and then shrunk again after consecutive inserts. Rather, the
  * field is allowed to stay larger than necessary, because a large prevlen
  * field implies the ziplist is holding large entries anyway.
@@ -620,50 +661,59 @@ unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p) {
     zlentry cur, next;
 
     while (p[0] != ZIP_END) {
+        // 获得当前节点的信息
         zipEntry(p, &cur);
         rawlen = cur.headersize + cur.len;
+        // 获得设置当前节点长度需要的编码长度
         rawlensize = zipStorePrevEntryLength(NULL,rawlen);
 
         /* Abort if there is no next entry. */
         if (p[rawlen] == ZIP_END) break;
+        // 获得next的节点信息
         zipEntry(p+rawlen, &next);
 
-        /* Abort when "prevlen" has not changed. */
+        /* Abort when "prevlen" has not changed. 如果next不用修改大小 */
         if (next.prevrawlen == rawlen) break;
 
+        // 如果next需要增大prevrawlensize
         if (next.prevrawlensize < rawlensize) {
             /* The "prevlen" field of "next" needs more bytes to hold
              * the raw length of "cur". */
             offset = p-zl;
-            extra = rawlensize-next.prevrawlensize;
-            zl = ziplistResize(zl,curlen+extra);
+            extra = rawlensize-next.prevrawlensize;//计算需要扩张的大小，用于后面realloc后找到当前节点位置
+            zl = ziplistResize(zl,curlen+extra);//重新开辟内存
             p = zl+offset;
 
             /* Current pointer and offset for next element. */
             np = p+rawlen;
             noffset = np-zl;
 
-            /* Update tail offset when next element is not the tail element. */
+            /* Update tail offset when next element is not the tail element. 如果next不是Tail */
             if ((zl+intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))) != np) {
+                // 更新压缩列表的offset(到tail的偏移量)
                 ZIPLIST_TAIL_OFFSET(zl) =
                     intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+extra);
             }
 
-            /* Move the tail to the back. */
+            /* Move the tail to the back.内存移动 */
             memmove(np+rawlensize,
                 np+next.prevrawlensize,
                 curlen-noffset-next.prevrawlensize-1);
+            // 更新 np 节点中的prevEntry长度
             zipStorePrevEntryLength(np,rawlen);
 
             /* Advance the cursor */
             p += rawlen;
-            curlen += extra;
+            curlen += extra;//增加总的bytes长度
         } else {
+            // next需要缩小prevrawlensize
             if (next.prevrawlensize > rawlensize) {
-                /* This would result in shrinking, which we want to avoid.
+                /* This would result in shrinking(收缩), which we want to avoid.
                  * So, set "rawlen" in the available bytes. */
+                // 将rawlen 新值作为large存储在next中避免收缩
                 zipStorePrevEntryLengthLarge(p+rawlen,rawlen);
             } else {
+                // 等于
                 zipStorePrevEntryLength(p+rawlen,rawlen);
             }
 
@@ -675,37 +725,44 @@ unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p) {
 }
 
 /* Delete "num" entries, starting at "p". Returns pointer to the ziplist. */
+// 删除p指针开始的num个元素entry
 unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int num) {
     unsigned int i, totlen, deleted = 0;
     size_t offset;
     int nextdiff = 0;
     zlentry first, tail;
 
+    // 获得当前节点的信息
     zipEntry(p, &first);
     for (i = 0; p[0] != ZIP_END && i < num; i++) {
         p += zipRawEntryLength(p);
-        deleted++;
+        deleted++;//累加可以删除的结点数量
     }
 
-    totlen = p-first.p; /* Bytes taken by the element(s) to delete. */
+    totlen = p-first.p; /* Bytes taken by the element(s) to delete. 获得累计需要删除的字节大小 */
     if (totlen > 0) {
+        // 删除结点后的next不是tail
         if (p[0] != ZIP_END) {
             /* Storing `prevrawlen` in this entry may increase or decrease the
              * number of bytes required compare to the current `prevrawlen`.
              * There always is room to store this, because it was previously
              * stored by an entry that is now being deleted. */
+            // first[--------------------------]p(now)
+            // 判断next是否需要修改prev的编码字节长度(next之前总是有room的)
             nextdiff = zipPrevLenByteDiff(p,first.prevrawlen);
 
-            /* Note that there is always space when p jumps backward: if
+            /* 指针p向前偏移总是有空间的
+             * Note that there is always space when p jumps backward: if
              * the new previous entry is large, one of the deleted elements
              * had a 5 bytes prevlen header, so there is for sure at least
              * 5 bytes free and we need just 4. */
             p -= nextdiff;
+            // 在新的位置存储prevrawlen
             zipStorePrevEntryLength(p,first.prevrawlen);
 
             /* Update offset for tail */
             ZIPLIST_TAIL_OFFSET(zl) =
-                intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))-totlen);
+                intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))-totlen);//删除totlen(总共需要删除的byte长度)
 
             /* When the tail contains more than one entry, we need to take
              * "nextdiff" in account as well. Otherwise, a change in the
@@ -713,26 +770,28 @@ unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int
             zipEntry(p, &tail);
             if (p[tail.headersize+tail.len] != ZIP_END) {
                 ZIPLIST_TAIL_OFFSET(zl) =
-                   intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+nextdiff);
+                   intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+nextdiff);//offset 增加调整next的prevrawlen的字节长度
             }
 
             /* Move tail to the front of the ziplist */
+            // first.p----------------------p=========
             memmove(first.p,p,
                 intrev32ifbe(ZIPLIST_BYTES(zl))-(p-zl)-1);
         } else {
+            // 直接删除到tail，修改压缩列表的offset即可
             /* The entire tail was deleted. No need to move memory. */
             ZIPLIST_TAIL_OFFSET(zl) =
                 intrev32ifbe((first.p-zl)-first.prevrawlen);
         }
 
         /* Resize and update length */
-        offset = first.p-zl;
+        offset = first.p-zl;//记录偏移量，用于relloc后再次获得当前节点
         zl = ziplistResize(zl, intrev32ifbe(ZIPLIST_BYTES(zl))-totlen+nextdiff);
         ZIPLIST_INCR_LENGTH(zl,-deleted);
         p = zl+offset;
 
         /* When nextdiff != 0, the raw length of the next entry has changed, so
-         * we need to cascade the update throughout the ziplist */
+         * we need to cascade the update throughout the ziplist 如果next的entry发生变化，我们需要级联修改 */
         if (nextdiff != 0)
             zl = __ziplistCascadeUpdate(zl,p);
     }
@@ -741,27 +800,29 @@ unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int
 
 /* Insert item at "p". */
 unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen) {
+    // pre declare
     size_t curlen = intrev32ifbe(ZIPLIST_BYTES(zl)), reqlen;
     unsigned int prevlensize, prevlen = 0;
     size_t offset;
     int nextdiff = 0;
     unsigned char encoding = 0;
-    long long value = 123456789; /* initialized to avoid warning. Using a value
+    long long value = 123456789; /* initialized to avoid warning. 防止编译报错 Using a value
                                     that is easy to see if for some reason
                                     we use it uninitialized. */
     zlentry tail;
 
     /* Find out prevlen for the entry that is inserted. */
     if (p[0] != ZIP_END) {
-        ZIP_DECODE_PREVLEN(p, prevlensize, prevlen);
+        ZIP_DECODE_PREVLEN(p, prevlensize, prevlen);//获得待插入位置p之前的prevlensize,prevlen
     } else {
+        // 插入位置是 tail
         unsigned char *ptail = ZIPLIST_ENTRY_TAIL(zl);
         if (ptail[0] != ZIP_END) {
-            prevlen = zipRawEntryLength(ptail);
+            prevlen = zipRawEntryLength(ptail);//获得 ptail的结点长度
         }
     }
 
-    /* See if the entry can be encoded */
+    /* See if the entry can be encoded 尝试作为long long存储 */
     if (zipTryEncoding(s,slen,&value,&encoding)) {
         /* 'encoding' is set to the appropriate integer encoding */
         reqlen = zipIntSize(encoding);
@@ -780,7 +841,7 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
      * its prevlen field. */
     int forcelarge = 0;
     nextdiff = (p[0] != ZIP_END) ? zipPrevLenByteDiff(p,reqlen) : 0;
-    if (nextdiff == -4 && reqlen < 4) {
+    if (nextdiff == -4 && reqlen < 4) {//如果需要缩小，会强制使用large存储避免缩小
         nextdiff = 0;
         forcelarge = 1;
     }
@@ -790,12 +851,12 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     zl = ziplistResize(zl,curlen+reqlen+nextdiff);
     p = zl+offset;
 
-    /* Apply memory move when necessary and update tail offset. */
+    /* Apply memory move when necessary and update tail offset. 使用内存移动memmove来更新tail offset */
     if (p[0] != ZIP_END) {
-        /* Subtract one because of the ZIP_END bytes */
+        /* Subtract(减少) one because of the ZIP_END bytes */
         memmove(p+reqlen,p-nextdiff,curlen-offset-1+nextdiff);
 
-        /* Encode this entry's raw length in the next entry. */
+        /* Encode this entry's raw length in the next entry. 设置增加后的next的PrevEntryLength*/
         if (forcelarge)
             zipStorePrevEntryLengthLarge(p+reqlen,reqlen);
         else
@@ -809,7 +870,7 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
          * "nextdiff" in account as well. Otherwise, a change in the
          * size of prevlen doesn't have an effect on the *tail* offset. */
         zipEntry(p+reqlen, &tail);
-        if (p[reqlen+tail.headersize+tail.len] != ZIP_END) {
+        if (p[reqlen+tail.headersize+tail.len] != ZIP_END) {//如果新增加结点的next不是tail，需要更新offset
             ZIPLIST_TAIL_OFFSET(zl) =
                 intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+nextdiff);
         }
@@ -826,7 +887,7 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
         p = zl+offset;
     }
 
-    /* Write the entry */
+    /* Write the entry 写入新的结点 */
     p += zipStorePrevEntryLength(p,prevlen);
     p += zipStoreEntryEncoding(p,encoding,slen);
     if (ZIP_IS_STR(encoding)) {
@@ -834,9 +895,10 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     } else {
         zipSaveInteger(p,value,encoding);
     }
-    ZIPLIST_INCR_LENGTH(zl,1);
+    ZIPLIST_INCR_LENGTH(zl,1);//增加压缩列表节点数量+1
     return zl;
 }
+// !HERE
 
 /* Merge ziplists 'first' and 'second' by appending 'second' to 'first'.
  *
