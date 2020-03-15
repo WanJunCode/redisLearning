@@ -36,13 +36,14 @@
 
 static int checkStringLength(client *c, long long size) {
     if (size > 512*1024*1024) {
+        // 不能超过 512M
         addReplyError(c,"string exceeds maximum allowed size (512MB)");
         return C_ERR;
     }
     return C_OK;
 }
 
-/* The setGenericCommand() function implements the SET operation with different
+/* The 通用设置指令setGenericCommand() function implements the SET operation with different
  * options and variants. This function is called in order to implement the
  * following commands: SET, SETEX, PSETEX, SETNX.
  *
@@ -58,23 +59,27 @@ static int checkStringLength(client *c, long long size) {
  * If ok_reply is NULL "+OK" is used.
  * If abort_reply is NULL, "$-1" is used. */
 
-#define OBJ_SET_NO_FLAGS 0
-#define OBJ_SET_NX (1<<0)          /* Set if key not exists. */
-#define OBJ_SET_XX (1<<1)          /* Set if key exists. */
-#define OBJ_SET_EX (1<<2)          /* Set if time in seconds is given */
-#define OBJ_SET_PX (1<<3)          /* Set if time in ms in given */
-#define OBJ_SET_KEEPTTL (1<<4)     /* Set and keep the ttl */
+// 使用bit位来表示SET操作
+#define OBJ_SET_NO_FLAGS 0          // 0000 0000
+#define OBJ_SET_NX (1<<0)          /* Set if key not exists. 0000 0001*/
+#define OBJ_SET_XX (1<<1)          /* Set if key exists. 0000 0010*/
+#define OBJ_SET_EX (1<<2)          /* Set if time in seconds is given 0000 0100*/
+#define OBJ_SET_PX (1<<3)          /* Set if time in ms in given 0000 1000*/
+#define OBJ_SET_KEEPTTL (1<<4)     /* Set and keep the ttl 0001 0000*/
 
+// 通用指令
 void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire, int unit, robj *ok_reply, robj *abort_reply) {
-    long long milliseconds = 0; /* initialized to avoid any harmness warning */
+    long long milliseconds = 0; /* initialized to avoid any harmness warning 初始化防止任何错误的警告 */
 
     if (expire) {
+        // 获得string对象expire中的数值并赋值给 milliseconds
         if (getLongLongFromObjectOrReply(c, expire, &milliseconds, NULL) != C_OK)
             return;
         if (milliseconds <= 0) {
             addReplyErrorFormat(c,"invalid expire time in %s",c->cmd->name);
             return;
         }
+        // 如果单位是秒
         if (unit == UNIT_SECONDS) milliseconds *= 1000;
     }
 

@@ -470,7 +470,7 @@ int string2l(const char *s, size_t slen, long *lval) {
  * a double: no spaces or other characters before or after the string
  * representing the number are accepted. */
 int string2ld(const char *s, size_t slen, long double *dp) {
-    char buf[MAX_LONG_DOUBLE_CHARS];
+    char buf[MAX_LONG_DOUBLE_CHARS];// 5k 大小
     long double value;
     char *eptr;
 

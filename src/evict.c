@@ -71,7 +71,8 @@ unsigned int getLRUClock(void) {
     return (mstime()/LRU_CLOCK_RESOLUTION) & LRU_CLOCK_MAX;
 }
 
-/* This function is used to obtain the current LRU clock.
+/* 获得当前的 LRU 时间, LRU时间每隔一段时间会刷新一次
+ * This function is used to obtain the current LRU clock.
  * If the current resolution is lower than the frequency we refresh the
  * LRU clock (as it should be in production servers) we return the
  * precomputed value, otherwise we need to resort to a system call. */
