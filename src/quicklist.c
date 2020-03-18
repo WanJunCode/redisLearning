@@ -754,7 +754,8 @@ int quicklistReplaceAtIndex(quicklist *quicklist, long index, void *data,
     }
 }
 
-/* Given two nodes, try to merge their ziplists.
+/* 尝试合并quicklist中的两个 node
+ * Given two nodes, try to merge their ziplists.
  *
  * This helps us not have a quicklist with 3 element ziplists if
  * our fill factor can handle much higher levels.
@@ -772,8 +773,10 @@ REDIS_STATIC quicklistNode *_quicklistZiplistMerge(quicklist *quicklist,
                                                    quicklistNode *b) {
     D("Requested merge (a,b) (%u, %u)", a->count, b->count);
 
+    // 将要合并的两个node解压
     quicklistDecompressNode(a);
     quicklistDecompressNode(b);
+    // 执行ziplist的合并操作时两个参数first和second有一个会被释放，另一个大的节点会realloc
     if ((ziplistMerge(&a->zl, &b->zl))) {
         /* We merged ziplists! Now remove the unused quicklistNode. */
         quicklistNode *keep = NULL, *nokeep = NULL;
@@ -785,7 +788,7 @@ REDIS_STATIC quicklistNode *_quicklistZiplistMerge(quicklist *quicklist,
             keep = a;
         }
         keep->count = ziplistLen(keep->zl);
-        quicklistNodeUpdateSz(keep);
+        quicklistNodeUpdateSz(keep);// 更新keep结点所占的字节长度sz
 
         nokeep->count = 0;
         __quicklistDelNode(quicklist, nokeep);
@@ -797,7 +800,8 @@ REDIS_STATIC quicklistNode *_quicklistZiplistMerge(quicklist *quicklist,
     }
 }
 
-/* Attempt to merge ziplists within two nodes on either side of 'center'.
+/* 尝试合并结点center的前两个结点与后两个结点
+ * Attempt to merge ziplists within two nodes on either side of 'center'.
  *
  * We attempt to merge:
  *   - (center->prev->prev, center->prev)
@@ -807,7 +811,7 @@ REDIS_STATIC quicklistNode *_quicklistZiplistMerge(quicklist *quicklist,
  */
 REDIS_STATIC void _quicklistMergeNodes(quicklist *quicklist,
                                        quicklistNode *center) {
-    int fill = quicklist->fill;
+    int fill = quicklist->fill;// 获得当前快速列表的负载因子
     quicklistNode *prev, *prev_prev, *next, *next_next, *target;
     prev = prev_prev = next = next_next = target = NULL;
 
@@ -850,7 +854,8 @@ REDIS_STATIC void _quicklistMergeNodes(quicklist *quicklist,
     }
 }
 
-/* Split 'node' into two parts, parameterized by 'offset' and 'after'.
+/* 通过offset将结点分割为两部分
+ * Split 'node' into two parts, parameterized by 'offset' and 'after'.
  *
  * The 'after' argument controls which quicklistNode gets returned.
  * If 'after'==1, returned node has elements after 'offset'.
@@ -869,10 +874,12 @@ REDIS_STATIC void _quicklistMergeNodes(quicklist *quicklist,
  * The input node keeps all elements not taken by the returned node.
  *
  * Returns newly created node or NULL if split not possible. */
+// 参数int after表明是否返回分割后半部分node
 REDIS_STATIC quicklistNode *_quicklistSplitNode(quicklistNode *node, int offset,
                                                 int after) {
     size_t zl_sz = node->sz;
 
+    // 创建新的结点并开启内存
     quicklistNode *new_node = quicklistCreateNode();
     new_node->zl = zmalloc(zl_sz);
 
