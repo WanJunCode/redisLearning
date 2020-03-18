@@ -1,5 +1,7 @@
 /* quicklist.h - A generic doubly linked quicklist implementation
  *
+ * 快速列表是  压缩列表ziplist和双链表linkedlist的结合
+ * 目标是取代 ziplist
  * Copyright (c) 2014, Matt Stancliff <matt@genges.com>
  * All rights reserved.
  *
@@ -35,19 +37,22 @@
 
 /* Node, quicklist, and Iterator are the only data structures used currently. */
 
-/* quicklistNode is a 32 byte struct describing a ziplist for a quicklist.
+/* 快速列表节点是一个32bit并且描述ziplist的数据结构
+ * quicklistNode is a 32 byte struct describing a ziplist for a quicklist.
  * We use bit fields keep the quicklistNode at 32 bytes.
  * count: 16 bits, max 65536 (max zl bytes is 65k, so max count actually < 32k).
  * encoding: 2 bits, RAW=1, LZF=2.
  * container: 2 bits, NONE=1, ZIPLIST=2.
- * recompress: 1 bit, bool, true if node is temporarry decompressed for usage.
+ * recompress: 1 bit, bool, true if node is temporarry decompressed(解压) for usage.
  * attempted_compress: 1 bit, boolean, used for verifying during testing.
- * extra: 10 bits, free for future use; pads out the remainder of 32 bits */
+ * extra: 10 bits, free for future use; pads out the remainder of 32 bits 填充10bit */
 typedef struct quicklistNode {
     struct quicklistNode *prev;
     struct quicklistNode *next;
-    unsigned char *zl;
-    unsigned int sz;             /* ziplist size in bytes */
+    unsigned char *zl;           // 如果是压缩的，则指向一个 quicklistLZF
+    unsigned int sz;             /* ziplist size in bytes 始终保持着压缩前的大小 */
+    // 一个int是4字节，32bit
+    // 16 + 2 + 2 + 1 + 1 + 10 = 32bit
     unsigned int count : 16;     /* count of items in ziplist */
     unsigned int encoding : 2;   /* RAW==1 or LZF==2 */
     unsigned int container : 2;  /* NONE==1 or ZIPLIST==2 */
@@ -66,9 +71,9 @@ typedef struct quicklistLZF {
     char compressed[];
 } quicklistLZF;
 
-/* Bookmarks are padded with realloc at the end of of the quicklist struct.
+/* Bookmarks(书签) are padded with realloc at the end of of the quicklist struct.
  * They should only be used for very big lists if thousands of nodes were the
- * excess memory usage is negligible, and there's a real need to iterate on them
+ * excess memory usage is negligible(微不足道), and there's a real need to iterate on them
  * in portions.
  * When not used, they don't add any memory overhead, but when used and then
  * deleted, some overhead remains (to avoid resonance).
@@ -107,20 +112,21 @@ typedef struct quicklist {
     quicklistNode *tail;
     unsigned long count;        /* total count of all entries in all ziplists */
     unsigned long len;          /* number of quicklistNodes */
-    int fill : QL_FILL_BITS;              /* fill factor for individual nodes */
+    int fill : QL_FILL_BITS;              /* fill factor for individual nodesfill 表示了单个节点(quicklistNode)的负载比例 */
     unsigned int compress : QL_COMP_BITS; /* depth of end nodes not to compress;0=off */
-    unsigned int bookmark_count: QL_BM_BITS;
+    unsigned int bookmark_count: QL_BM_BITS;// 书签数量
     quicklistBookmark bookmarks[];
 } quicklist;
 
 typedef struct quicklistIter {
     const quicklist *quicklist;
-    quicklistNode *current;
+    quicklistNode *current;//指向当前遍历的节点
     unsigned char *zi;
     long offset; /* offset in current ziplist */
     int direction;
 } quicklistIter;
 
+// 快速列表元素
 typedef struct quicklistEntry {
     const quicklist *quicklist;
     quicklistNode *node;
@@ -134,7 +140,7 @@ typedef struct quicklistEntry {
 #define QUICKLIST_HEAD 0
 #define QUICKLIST_TAIL -1
 
-/* quicklist node encodings */
+/* quicklist node encodings 快速列表节点编码的两种方式 LZF表示进一步的压缩 */
 #define QUICKLIST_NODE_ENCODING_RAW 1
 #define QUICKLIST_NODE_ENCODING_LZF 2
 
@@ -145,6 +151,7 @@ typedef struct quicklistEntry {
 #define QUICKLIST_NODE_CONTAINER_NONE 1
 #define QUICKLIST_NODE_CONTAINER_ZIPLIST 2
 
+// 判断快速列表节点是否压缩
 #define quicklistNodeIsCompressed(node)                                        \
     ((node)->encoding == QUICKLIST_NODE_ENCODING_LZF)
 
