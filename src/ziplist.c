@@ -898,7 +898,6 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     ZIPLIST_INCR_LENGTH(zl,1);//增加压缩列表节点数量+1
     return zl;
 }
-// !HERE
 
 /* Merge ziplists 'first' and 'second' by appending 'second' to 'first'.
  *
