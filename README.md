@@ -43,3 +43,5 @@ HyperLogLog键 hyperloglog.c中所有以pf开头的函数
 
 object.c  完成 robj
 对于string对象，编码方式有三种：raw embstr int (其中encode方式是raw embstr，decode方式是int)
+
+2020/3/22 完成quicklist.c

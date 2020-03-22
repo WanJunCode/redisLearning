@@ -128,13 +128,13 @@ typedef struct quicklistIter {
 
 // 快速列表元素
 typedef struct quicklistEntry {
-    const quicklist *quicklist;
-    quicklistNode *node;
-    unsigned char *zi;
-    unsigned char *value;
-    long long longval;
+    const quicklist *quicklist;         // 关联的 quicklist
+    quicklistNode *node;                // 关联的 quicklist node 即 ziplist
+    unsigned char *zi;                  // 关联的 ziplist node
+    unsigned char *value;               // 关联的 ziplist node  value
+    long long longval;                  // 关联的 ziplist node  value  int
     unsigned int sz;
-    int offset;
+    int offset;                         // ziplist node结点在整体 ziplist上的偏移量
 } quicklistEntry;
 
 #define QUICKLIST_HEAD 0
