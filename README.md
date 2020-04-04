@@ -45,3 +45,11 @@ object.c  完成 robj
 对于string对象，编码方式有三种：raw embstr int (其中encode方式是raw embstr，decode方式是int)
 
 2020/3/22 完成quicklist.c
+
+2020/4/4  
+ae.h  事件处理 event loop
+ae_epoll.h 只关注Linux环境
+aeEventLoop *eventLoop 结构体中
+apidata 指向具体的实现
+events 指针指向注册监听的fd数组
+fired 指针指向触发了事件的fd和事件类型mask

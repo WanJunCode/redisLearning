@@ -1,4 +1,5 @@
-/* A simple event-driven programming library. Originally I wrote this code
+/* 一个简单的事件驱动库
+ * A simple event-driven programming library. Originally I wrote this code
  * for the Jim's event-loop (Jim is a Tcl interpreter) but later translated
  * it in form of a library for easy reuse.
  *
@@ -39,43 +40,49 @@
 #define AE_ERR -1
 
 #define AE_NONE 0       /* No events registered. */
-#define AE_READABLE 1   /* Fire when descriptor is readable. */
-#define AE_WRITABLE 2   /* Fire when descriptor is writable. */
-#define AE_BARRIER 4    /* With WRITABLE, never fire the event if the
-                           READABLE event already fired in the same event
-                           loop iteration. Useful when you want to persist
-                           things to disk before sending replies, and want
-                           to do that in a group fashion. */
+#define AE_READABLE 1   /* Fire when descriptor is readable. 文件描述符可读 */
+#define AE_WRITABLE 2   /* Fire when descriptor is writable. 文件描述符可写 */
 
-#define AE_FILE_EVENTS 1
-#define AE_TIME_EVENTS 2
-#define AE_ALL_EVENTS (AE_FILE_EVENTS|AE_TIME_EVENTS)
-#define AE_DONT_WAIT 4
+#define AE_BARRIER 4
+/* 在可写的时候不会触发可读事件，用于将某些thing持久化到磁盘中
+With WRITABLE, never fire the event if the READABLE event already fired in the same event
+loop iteration. Useful when you want to persist things to disk before sending replies, and want
+to do that in a group fashion. */
+
+#define AE_FILE_EVENTS 1    // 文件事件
+#define AE_TIME_EVENTS 2    // 定时器事件
+#define AE_ALL_EVENTS (AE_FILE_EVENTS|AE_TIME_EVENTS)       // 文件事件和定时器事件
+#define AE_DONT_WAIT 4          // 不等待
 #define AE_CALL_AFTER_SLEEP 8
 
 #define AE_NOMORE -1
-#define AE_DELETED_EVENT_ID -1
+#define AE_DELETED_EVENT_ID -1  // 被删除的事件ID
 
 /* Macros */
 #define AE_NOTUSED(V) ((void) V)
 
+// 声明
 struct aeEventLoop;
 
 /* Types and data structures */
+// 文件事件处理函数
 typedef void aeFileProc(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask);
+// 定时器事件处理函数
 typedef int aeTimeProc(struct aeEventLoop *eventLoop, long long id, void *clientData);
+// 终止处理函数
 typedef void aeEventFinalizerProc(struct aeEventLoop *eventLoop, void *clientData);
+// 在sleep之前处理函数
 typedef void aeBeforeSleepProc(struct aeEventLoop *eventLoop);
 
-/* File event structure */
+/* 文件描述符事件结构 File event structure */
 typedef struct aeFileEvent {
     int mask; /* one of AE_(READABLE|WRITABLE|BARRIER) */
-    aeFileProc *rfileProc;
-    aeFileProc *wfileProc;
+    aeFileProc *rfileProc;      // 读取文件描述符处理函数
+    aeFileProc *wfileProc;      // 写入文件描述符处理函数
     void *clientData;
 } aeFileEvent;
 
-/* Time event structure */
+/* 定时器事件 Time event structure */
 typedef struct aeTimeEvent {
     long long id; /* time event identifier. */
     long when_sec; /* seconds */
@@ -83,11 +90,11 @@ typedef struct aeTimeEvent {
     aeTimeProc *timeProc;
     aeEventFinalizerProc *finalizerProc;
     void *clientData;
-    struct aeTimeEvent *prev;
-    struct aeTimeEvent *next;
+    struct aeTimeEvent *prev;       // 指向前一个时间器
+    struct aeTimeEvent *next;       // 指向下一个时间器
 } aeTimeEvent;
 
-/* A fired event */
+/* 触发的事件 A fired event */
 typedef struct aeFiredEvent {
     int fd;
     int mask;
@@ -95,21 +102,21 @@ typedef struct aeFiredEvent {
 
 /* State of an event based program */
 typedef struct aeEventLoop {
-    int maxfd;   /* highest file descriptor currently registered */
-    int setsize; /* max number of file descriptors tracked */
-    long long timeEventNextId;
-    time_t lastTime;     /* Used to detect system clock skew */
-    aeFileEvent *events; /* Registered events */
-    aeFiredEvent *fired; /* Fired events */
-    aeTimeEvent *timeEventHead;
+    int maxfd;   /* highest file descriptor currently registered 当前注册的文件描述符最大值 */
+    int setsize; /* max number of file descriptors tracked 追踪的文件描述符最大数量 */
+    long long timeEventNextId;      // 下一个时间器的ID
+    time_t lastTime;     /* Used to detect system clock skew 用于检测系统时钟偏斜 */
+    aeFileEvent *events; /* Registered events 注册的事件数组，索引就是文件描述符 */
+    aeFiredEvent *fired; /* Fired events 存储触发的事件fd以及对应的事件掩码mask */
+    aeTimeEvent *timeEventHead; // 时间器
     int stop;
     void *apidata; /* This is used for polling API specific data */
-    aeBeforeSleepProc *beforesleep;
-    aeBeforeSleepProc *aftersleep;
+    aeBeforeSleepProc *beforesleep;     // 在 sleep 之前执行的函数
+    aeBeforeSleepProc *aftersleep;      // 在 sleep 之后执行的函数
     int flags;
 } aeEventLoop;
 
-/* Prototypes */
+/* Prototypes 函数原型 */
 aeEventLoop *aeCreateEventLoop(int setsize);
 void aeDeleteEventLoop(aeEventLoop *eventLoop);
 void aeStop(aeEventLoop *eventLoop);

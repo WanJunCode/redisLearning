@@ -86,6 +86,7 @@ aeEventLoop *aeCreateEventLoop(int setsize) {
 
 err:
     if (eventLoop) {
+        // TODO 
         zfree(eventLoop->events);
         zfree(eventLoop->fired);
         zfree(eventLoop);

@@ -90,6 +90,7 @@ static inline char sdsReqType(size_t string_size) {
  * end of the string. However the string is binary safe and can contain
  * \0 characters in the middle, as the length is stored in the sds header. */
 // init 只有三种赋值 SDS_NOINIT NULL 自定义
+// const 在 * 左边：左值右针 表示该指针指向的值不能改变
 sds sdsnewlen(const void *init, size_t initlen) {
     void *sh;
     sds s;
@@ -105,7 +106,7 @@ sds sdsnewlen(const void *init, size_t initlen) {
     sh = s_malloc(hdrlen+initlen+1);    // 开辟内存空间
 
     if (init==SDS_NOINIT)
-        init = NULL;    // ! init 是const void *指针，为什么可以被赋值为 NULL； 目的是为了后续不进行数据复制
+        init = NULL;    // ! init 是const void *指针，左值右针 值不能改变但是可以改变指针指向； 目的是为了后续不进行数据复制
     else if (!init)     // init 是 NULL 会进行初始化
         memset(sh, 0, hdrlen+initlen+1);
 
@@ -793,7 +794,6 @@ void sdsrange(sds s, ssize_t start, ssize_t end) {
 /* Apply tolower() to every character of the sds string 's'. */
 void sdstolower(sds s) {
     size_t len = sdslen(s), j;
-
     for (j = 0; j < len; j++) s[j] = tolower(s[j]);
 }
 

@@ -34,6 +34,8 @@
 #define __SDS_H
 
 #define SDS_MAX_PREALLOC (1024*1024)
+
+// 声明一个指针，在 sds.c 中定义
 extern const char *SDS_NOINIT;
 
 #include <sys/types.h>
@@ -45,7 +47,7 @@ typedef char *sds;
 /* Note: sdshdr5 is never used, we just access the flags byte directly.
  * However is here to document the layout of type 5 SDS strings. */
 struct __attribute__ ((__packed__)) sdshdr5 {
-    unsigned char flags; /* 3 lsb of type, and 5 msb of string length */
+    unsigned char flags; /* 3 lsb of type, and 5 msb of string length 最低三位表示类型，高5位表示长度 */
     char buf[];
 };
 
@@ -53,24 +55,31 @@ struct __attribute__ ((__packed__)) sdshdr5 {
 // len      表示已经使用的长度
 // alloc    表示创建的内存长度
 
+// 3 字节  最长 256
 struct __attribute__ ((__packed__)) sdshdr8 {
     uint8_t len; /* used */
     uint8_t alloc; /* excluding the header and null terminator */
-    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    unsigned char flags; /* 3 lsb of type, 5 unused bits 低3位表示类型*/
     char buf[];
 };
+
+// 5 字节  最长 65 536
 struct __attribute__ ((__packed__)) sdshdr16 {
     uint16_t len; /* used */
     uint16_t alloc; /* excluding the header and null terminator */
     unsigned char flags; /* 3 lsb of type, 5 unused bits */
     char buf[];
 };
+
+// 9 字节 最长 4 294 967 296
 struct __attribute__ ((__packed__)) sdshdr32 {
     uint32_t len; /* used */
     uint32_t alloc; /* excluding the header and null terminator */
     unsigned char flags; /* 3 lsb of type, 5 unused bits */
     char buf[];
 };
+
+// 17 字节， 数据最长 1.844674407371e+19  非常大
 struct __attribute__ ((__packed__)) sdshdr64 {
     uint64_t len; /* used */
     uint64_t alloc; /* excluding the header and null terminator */
@@ -78,20 +87,26 @@ struct __attribute__ ((__packed__)) sdshdr64 {
     char buf[];
 };
 
+// 低三位表示类型
 #define SDS_TYPE_5  0
 #define SDS_TYPE_8  1       // 0001
 #define SDS_TYPE_16 2       // 0010
 #define SDS_TYPE_32 3       // 0011
 #define SDS_TYPE_64 4       // 0100
+// 低三位掩码
 #define SDS_TYPE_MASK 7     // 0111
 #define SDS_TYPE_BITS 3
 
 // s 是sds数据地址，根据不同类型获取 sds头地址并赋值给 sh
+// 宏定义中 ## 表示连接
 #define SDS_HDR_VAR(T,s) struct sdshdr##T *sh = (void*)((s)-(sizeof(struct sdshdr##T)));
 // s 是指针地址，往回获取struct sdshdr#头指针地址
 #define SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))
+
+// 用于 sdshdr5 类型，右移3位剩下高5位作为长度
 #define SDS_TYPE_5_LEN(f) ((f)>>SDS_TYPE_BITS)
 
+// 头文件中使用 static inline 形式
 static inline size_t sdslen(const sds s) {
     unsigned char flags = s[-1];                // -1 表示往回一个bit
     switch(flags&SDS_TYPE_MASK) {
@@ -100,7 +115,7 @@ static inline size_t sdslen(const sds s) {
         case SDS_TYPE_8:
             return SDS_HDR(8,s)->len;   // 宏解开后是 ((struct sdshdr8 *)((s)-(sizeof(struct sdshdr8))))->len
         case SDS_TYPE_16:
-            return SDS_HDR(16,s)->len;
+            return SDS_HDR(16,s)->len;  // 宏解开后是 ((struct sdshdr16 *)((s)-(sizeof(struct sdshdr16))))->len
         case SDS_TYPE_32:
             return SDS_HDR(32,s)->len;
         case SDS_TYPE_64:
@@ -138,9 +153,9 @@ static inline size_t sdsavail(const sds s) {
 // 重新设置sds的已使用长度
 static inline void sdssetlen(sds s, size_t newlen) {
     unsigned char flags = s[-1];
+    // 和掩码 与操作
     switch(flags&SDS_TYPE_MASK) {
-        case SDS_TYPE_5:
-            {
+        case SDS_TYPE_5:{
                 unsigned char *fp = ((unsigned char*)s)-1;
                 *fp = SDS_TYPE_5 | (newlen << SDS_TYPE_BITS);
             }
@@ -164,8 +179,7 @@ static inline void sdssetlen(sds s, size_t newlen) {
 static inline void sdsinclen(sds s, size_t inc) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
-        case SDS_TYPE_5:
-            {
+        case SDS_TYPE_5:{
                 unsigned char *fp = ((unsigned char*)s)-1;
                 unsigned char newlen = SDS_TYPE_5_LEN(flags)+inc;
                 *fp = SDS_TYPE_5 | (newlen << SDS_TYPE_BITS);
@@ -204,6 +218,7 @@ static inline size_t sdsalloc(const sds s) {
     return 0;
 }
 
+// 设置新的sds alloc长度
 static inline void sdssetalloc(sds s, size_t newlen) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {

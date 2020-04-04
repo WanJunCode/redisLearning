@@ -32,14 +32,20 @@
 #include <sys/epoll.h>
 
 typedef struct aeApiState {
-    int epfd;
-    struct epoll_event *events;
+    int epfd;                           // epoll 监听fd
+    struct epoll_event *events;         // 指向数组，数组大小为跟踪的fd最大数量
 } aeApiState;
 
+// 所有函数以  aeApixxx  开始
+
+
+// aeEventLoop *eventLoop 从中获得 setsize (最大跟踪fd数量)
+// 创建 epoll fd 后绑定在 eventLoop->apidata
 static int aeApiCreate(aeEventLoop *eventLoop) {
     aeApiState *state = zmalloc(sizeof(aeApiState));
 
     if (!state) return -1;
+    // 根据eventloop中跟踪的fd最大数量创建 epoll_event 数组
     state->events = zmalloc(sizeof(struct epoll_event)*eventLoop->setsize);
     if (!state->events) {
         zfree(state);
@@ -55,6 +61,7 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
     return 0;
 }
 
+// 更新内部 epoll_event 数组大小
 static int aeApiResize(aeEventLoop *eventLoop, int setsize) {
     aeApiState *state = eventLoop->apidata;
 
@@ -73,13 +80,14 @@ static void aeApiFree(aeEventLoop *eventLoop) {
 static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
     aeApiState *state = eventLoop->apidata;
     struct epoll_event ee = {0}; /* avoid valgrind warning */
-    /* If the fd was already monitored for some event, we need a MOD
-     * operation. Otherwise we need an ADD operation. */
-    int op = eventLoop->events[fd].mask == AE_NONE ?
-            EPOLL_CTL_ADD : EPOLL_CTL_MOD;
+
+    /* If the fd was already monitored for some event, we need a MOD operation. Otherwise we need an ADD operation.
+     * 如果之前有监听的事件则使用 EPOLL_CTL_MOD 操作，之前没有监听的事件使用 EPOLL_CTL_ADD 操作 */
+    int op = eventLoop->events[fd].mask == AE_NONE ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
 
     ee.events = 0;
     mask |= eventLoop->events[fd].mask; /* Merge old events */
+    // 根据事件掩码mask增加需要监听的事件
     if (mask & AE_READABLE) ee.events |= EPOLLIN;
     if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;
     ee.data.fd = fd;
@@ -87,9 +95,11 @@ static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
     return 0;
 }
 
+// 删除事件
 static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int delmask) {
     aeApiState *state = eventLoop->apidata;
     struct epoll_event ee = {0}; /* avoid valgrind warning */
+    // 根据 fd 作为偏移量在 events 指向的数组中找到对应的 aeFileEvent
     int mask = eventLoop->events[fd].mask & (~delmask);
 
     ee.events = 0;
@@ -97,6 +107,7 @@ static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int delmask) {
     if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;
     ee.data.fd = fd;
     if (mask != AE_NONE) {
+        // 没有注册监听的事件了
         epoll_ctl(state->epfd,EPOLL_CTL_MOD,fd,&ee);
     } else {
         /* Note, Kernel < 2.6.9 requires a non null event pointer even for
@@ -105,10 +116,12 @@ static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int delmask) {
     }
 }
 
+// ! CORE CODE
 static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
     aeApiState *state = eventLoop->apidata;
     int retval, numevents = 0;
 
+    // state->events 指向足够大的epoll_event数组，用于存储返回的结果； 数组大小由eventLoop->setsize指定
     retval = epoll_wait(state->epfd,state->events,eventLoop->setsize,
             tvp ? (tvp->tv_sec*1000 + tvp->tv_usec/1000) : -1);
     if (retval > 0) {
@@ -117,12 +130,15 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
         numevents = retval;
         for (j = 0; j < numevents; j++) {
             int mask = 0;
+            // state->events 数组存储了epoll的结果
             struct epoll_event *e = state->events+j;
 
             if (e->events & EPOLLIN) mask |= AE_READABLE;
             if (e->events & EPOLLOUT) mask |= AE_WRITABLE;
             if (e->events & EPOLLERR) mask |= AE_WRITABLE|AE_READABLE;
             if (e->events & EPOLLHUP) mask |= AE_WRITABLE|AE_READABLE;
+
+            // eventLoop->fired 数组存储触发的 fd 和事件 mask
             eventLoop->fired[j].fd = e->data.fd;
             eventLoop->fired[j].mask = mask;
         }

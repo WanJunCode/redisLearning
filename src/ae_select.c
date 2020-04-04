@@ -49,6 +49,7 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
     return 0;
 }
 
+// select 限制了数量不能大于1024
 static int aeApiResize(aeEventLoop *eventLoop, int setsize) {
     /* Just ensure we have enough room in the fd_set type. */
     if (setsize >= FD_SETSIZE) return -1;
