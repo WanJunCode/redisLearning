@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
  
+//  注意使用 long long int a
 void ip2num(long long int a,int b,int c,int d){
     long long int n=(a<<24)+(b<<16)+(c<<8)+d;
     printf("%lld\n",n);
@@ -15,8 +16,11 @@ void num2ip(int n){
     printf("%d.%d.%d.%d\n",a,b,c,d);
 }
 
-int main(void){
+int main(void)
+{
     int a,b,c,d,num;
+    // 输入的ip地址存入 a b c d
+    // 输入的整数存入 num
     while(scanf("%d.%d.%d.%d\n%d",&a,&b,&c,&d,&num)!=EOF){
         ip2num(a,b,c,d);
         num2ip(num);
