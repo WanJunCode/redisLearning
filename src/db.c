@@ -53,14 +53,18 @@ void updateLFU(robj *val) {
  * implementations that should instead rely on lookupKeyRead(),
  * lookupKeyWrite() and lookupKeyReadWithFlags(). */
 robj *lookupKey(redisDb *db, robj *key, int flags) {
+    // 通过key名称在 字典中查找
     dictEntry *de = dictFind(db->dict,key->ptr);
     if (de) {
         robj *val = dictGetVal(de);
 
-        /* Update the access time for the ageing algorithm.
+        /* 更新查找到的 key 的access time
+         * Update the access time for the ageing algorithm.
          * Don't do it if we have a saving child, as this will trigger
          * a copy on write madness. */
+        // 如果有子进程正在执行保存指令，不会更新  LFU 和 LRU
         if (!hasActiveChildProcess() && !(flags & LOOKUP_NOTOUCH)){
+            // LFU LRU 两种策略
             if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
                 updateLFU(val);
             } else {
@@ -146,16 +150,20 @@ robj *lookupKeyRead(redisDb *db, robj *key) {
     return lookupKeyReadWithFlags(db,key,LOOKUP_NONE);
 }
 
-/* Lookup a key for write operations, and as a side effect, if needed, expires
+/* 为了写操作查找一个key，如果该key具有TTL并且达到指定时间则超时处理
+ * Lookup a key for write operations, and as a side effect, if needed, expires
  * the key if its TTL is reached.
  *
  * Returns the linked value object if the key exists or NULL if the key
  * does not exist in the specified DB. */
+// 如果找到key，返回 value object
+// 如果key不存在，返回 null 
 robj *lookupKeyWriteWithFlags(redisDb *db, robj *key, int flags) {
     expireIfNeeded(db,key);
     return lookupKey(db,key,flags);
 }
 
+// 获得指定数据库db的键key 锁
 robj *lookupKeyWrite(redisDb *db, robj *key) {
     return lookupKeyWriteWithFlags(db, key, LOOKUP_NONE);
 }
@@ -222,11 +230,12 @@ void dbOverwrite(redisDb *db, robj *key, robj *val) {
  * All the new keys in the database should be created via this interface. */
 void genericSetKey(redisDb *db, robj *key, robj *val, int keepttl) {
     if (lookupKeyWrite(db,key) == NULL) {
-        dbAdd(db,key,val);
+        dbAdd(db,key,val);// 添加新的key
     } else {
-        dbOverwrite(db,key,val);
+        dbOverwrite(db,key,val);// 重写key
     }
     incrRefCount(val);
+    // 如果当前key没有设置ttl，则从 db->expire 字典中删除
     if (!keepttl) removeExpire(db,key);
     signalModifiedKey(db,key);
 }
@@ -441,6 +450,7 @@ long long dbTotalServerKeyCount() {
 
 /*-----------------------------------------------------------------------------
  * Hooks for key space changes.
+ * key 控件改变的 钩子函数
  *
  * Every time a key in the database is modified the function
  * signalModifiedKey() is called.
@@ -448,9 +458,10 @@ long long dbTotalServerKeyCount() {
  * Every time a DB is flushed the function signalFlushDb() is called.
  *----------------------------------------------------------------------------*/
 
+// 提醒当前所有 watch 该 key 的客户端为 dirty 状态
 void signalModifiedKey(redisDb *db, robj *key) {
     touchWatchedKey(db,key);
-    trackingInvalidateKey(key);
+    trackingInvalidateKey(key);//跟踪无效的数据
 }
 
 void signalFlushedDb(int dbid) {

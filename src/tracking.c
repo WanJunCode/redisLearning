@@ -263,6 +263,8 @@ void trackingRememberKeyToBroadcast(char *keyname, size_t keylen) {
  * when a key changes value. In the context of keys tracking, our task here is
  * to send a notification to every client that may have keys about such caching
  * slot. */
+// 当key的值改变时，需要给所有具有当前key cache的客户端发出提示
+// 跟踪无效的key
 void trackingInvalidateKey(robj *keyobj) {
     if (TrackingTable == NULL) return;
     sds sdskey = keyobj->ptr;

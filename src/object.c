@@ -412,6 +412,7 @@ robj *resetRefCount(robj *obj) {
     return obj;
 }
 
+// 如果不是类型type 则 return 1
 int checkType(client *c, robj *o, int type) {
     if (o->type != type) {
         addReply(c,shared.wrongtypeerr);

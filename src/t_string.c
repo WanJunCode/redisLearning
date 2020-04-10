@@ -34,6 +34,7 @@
  * String Commands
  *----------------------------------------------------------------------------*/
 
+// 检查字符串长度 不能超过 512M
 static int checkStringLength(client *c, long long size) {
     if (size > 512*1024*1024) {
         // 不能超过 512M
@@ -67,7 +68,7 @@ static int checkStringLength(client *c, long long size) {
 #define OBJ_SET_PX (1<<3)          /* Set if time in ms in given 0000 1000*/
 #define OBJ_SET_KEEPTTL (1<<4)     /* Set and keep the ttl 0001 0000*/
 
-// 通用指令
+// 通用SET指令
 void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire, int unit, robj *ok_reply, robj *abort_reply) {
     long long milliseconds = 0; /* initialized to avoid any harmness warning 初始化防止任何错误的警告 */
 
@@ -83,6 +84,7 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
         if (unit == UNIT_SECONDS) milliseconds *= 1000;
     }
 
+    // key不存在才执行，查找当前key不为null
     if ((flags & OBJ_SET_NX && lookupKeyWrite(c->db,key) != NULL) ||
         (flags & OBJ_SET_XX && lookupKeyWrite(c->db,key) == NULL))
     {
@@ -105,10 +107,13 @@ void setCommand(client *c) {
     int unit = UNIT_SECONDS;
     int flags = OBJ_SET_NO_FLAGS;
 
+    // c->argv 存储传输的指令列表
     for (j = 3; j < c->argc; j++) {
         char *a = c->argv[j]->ptr;
+        // 
         robj *next = (j == c->argc-1) ? NULL : c->argv[j+1];
 
+        // [Nn][Xx]_
         if ((a[0] == 'n' || a[0] == 'N') &&
             (a[1] == 'x' || a[1] == 'X') && a[2] == '\0' &&
             !(flags & OBJ_SET_XX))
@@ -118,6 +123,7 @@ void setCommand(client *c) {
                    (a[1] == 'x' || a[1] == 'X') && a[2] == '\0' &&
                    !(flags & OBJ_SET_NX))
         {
+            // [xX][xX]_
             flags |= OBJ_SET_XX;
         } else if (!strcasecmp(c->argv[j]->ptr,"KEEPTTL") &&
                    !(flags & OBJ_SET_EX) && !(flags & OBJ_SET_PX))
@@ -147,6 +153,7 @@ void setCommand(client *c) {
         }
     }
 
+    // 尝试将 value 进行压缩
     c->argv[2] = tryObjectEncoding(c->argv[2]);
     setGenericCommand(c,flags,c->argv[1],c->argv[2],expire,unit,NULL,NULL);
 }
@@ -193,6 +200,7 @@ void getsetCommand(client *c) {
     server.dirty++;
 }
 
+// 设置range范围内的string
 void setrangeCommand(client *c) {
     robj *o;
     long offset;
@@ -206,6 +214,7 @@ void setrangeCommand(client *c) {
         return;
     }
 
+    // 获得key的写锁
     o = lookupKeyWrite(c->db,c->argv[1]);
     if (o == NULL) {
         /* Return 0 when setting nothing on a non-existing string */
@@ -294,6 +303,7 @@ void getrangeCommand(client *c) {
     }
 }
 
+// 获得多个 keys 对应的 values
 void mgetCommand(client *c) {
     int j;
 
@@ -348,15 +358,18 @@ void msetnxCommand(client *c) {
     msetGenericCommand(c,1);
 }
 
+// 自增自减操作
 void incrDecrCommand(client *c, long long incr) {
     long long value, oldvalue;
     robj *o, *new;
 
     o = lookupKeyWrite(c->db,c->argv[1]);
+    // 如果 o 存在并且不是 string 类型，直接返回
     if (o != NULL && checkType(c,o,OBJ_STRING)) return;
     if (getLongLongFromObjectOrReply(c,o,&value,NULL) != C_OK) return;
 
     oldvalue = value;
+    // 防止溢出判断
     if ((incr < 0 && oldvalue < 0 && incr < (LLONG_MIN-oldvalue)) ||
         (incr > 0 && oldvalue > 0 && incr > (LLONG_MAX-oldvalue))) {
         addReplyError(c,"increment or decrement would overflow");
@@ -368,6 +381,7 @@ void incrDecrCommand(client *c, long long incr) {
         (value < 0 || value >= OBJ_SHARED_INTEGERS) &&
         value >= LONG_MIN && value <= LONG_MAX)
     {
+        // 当前的value在可表示数值内，但是不能使用共享对象
         new = o;
         o->ptr = (void*)((long)value);
     } else {
