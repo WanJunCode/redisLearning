@@ -1,4 +1,4 @@
-#include<iostream>
+#include <iostream>
  
 using namespace std;
  
@@ -13,7 +13,7 @@ int main()
         {
             for(int j=0;j<33;j++)
             {
-                money=100-5*i-3*j;
+                money=100-5*i-3*j;// 剩下的钱买雏鸡
                 c=money*3;
                 if(i+j+c==100)
                 {
@@ -24,8 +24,3 @@ int main()
     }
     return 0;
 }
-
-
-
-
-

@@ -1,18 +1,17 @@
 #include <iostream>
 #include <string>
 #include <vector>
- 
 using namespace std;
-
-#define max(a,b) (a>b)?a:b;
- 
 int main()
 {
+    // str1 表示输入的通配符
+    // str2 表示需要匹配的字符串
     string str1,str2;
     while(cin>>str1>>str2)
-    {      
+    {
         int len1=str1.size();
         int len2=str2.size();
+        // 使用动态规划
         vector<vector<int> > dp(len1+1,vector<int>(len2+1,0));
         dp[0][0]=1;
         for(int i=1;i<len1+1;i++)

@@ -8,6 +8,7 @@ struct ListNode
     ListNode *next;
 };
 
+// 释放内存
 void ClearList(ListNode *L)
 {
     ListNode *p,*q;
@@ -31,6 +32,7 @@ int main()
         rear->key=x;
         rear->next=NULL;
         q=rear;
+
         int i;
         for(i=0;i<n-1;i++)
         {
@@ -42,6 +44,7 @@ int main()
             q=p;
         }
         q->next=NULL;
+
         int k;
         cin>>k;
         q=rear;
@@ -51,7 +54,6 @@ int main()
         else{
             for(i=0;i<n-k;i++)
             {
-                //cout<<q->key<<" ";
                 q=q->next;
             }
             cout<<q->key<<endl;

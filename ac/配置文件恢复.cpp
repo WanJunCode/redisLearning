@@ -22,28 +22,30 @@ int main()
 {
     char str[M][M];
     int count=0;
+    // 输入
     while(gets(str[count]))
     {
         count++;
     }
+
+    // 遍历处理输入的每条指令
     for(int i=0;i<count;i++)
     {
         int l=strlen(str[i]);
+        // 将一行指令切分到二维数组s1中，
         char s1[M][M];
         int f1=0,f2=0;
-        for(int j=0;j<l;j++)
-        {
-            if(str[i][j]==' ')
-            {
+        for(int j=0;j<l;j++){
+            if(str[i][j]==' '){
+                // 忽略单词之间的空格
                 j++;
                 while(str[i][j]==' ')
                 {
                     j++;
                 }
                 j--;
- 
-                s1[f1][f2]='\0';
-                f1++;
+                s1[f1][f2]='\0';//设置上一个指令结束字符
+                f1++;//设置下一个个单词的索引
                 f2=0;
                 continue;      
             }
@@ -72,7 +74,7 @@ int main()
             else if(ismatch(s1[0],"board")&&ismatch(s1[1],"delet"))
                 cout<<"no board at all"<<endl;
             else
-                cout<<"unkown command"<<endl;  
+                cout<<"unkown command"<<endl;
         }
     }
     return 0;

@@ -21,11 +21,12 @@ int main(int argc, char const *argv[])
                 cin >> m2[i][j];
             }
         }
+        // 计算矩阵乘法 x,y,z
         for (int i = 0; i < x; ++i)
         {
             for (int j = 0; j < z; ++j)
             {
-                int k=0,l=0,ans=0;
+                int k=0,ans=0;
                 while(k < y)
                 {
                     ans += m1[i][k] * m2[k][j];
@@ -34,8 +35,10 @@ int main(int argc, char const *argv[])
                 r[i][j] = ans;             
             }      
         }
+        
         for (int i = 0; i < x; ++i)
         {
+            // z-1 ，因为最后一个元素输出后要换行
             for (int j = 0; j < z-1; ++j)
             {
                 cout << r[i][j] << ' ';

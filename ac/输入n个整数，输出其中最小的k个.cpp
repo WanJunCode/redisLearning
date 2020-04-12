@@ -17,6 +17,8 @@ int main()
             cin>>temp;
             array.push_back(temp);
         }
+        
+        // 数组从小到大排列
         sort(array.begin(),array.end());
         for(int i=0;i<min_sum-1;i++)
         {

@@ -1,7 +1,7 @@
-#include<iostream>
-#include<string>
-#include<vector>
-#include<stack>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <stack>
 using namespace std;
 
 int main()
@@ -12,10 +12,11 @@ int main()
 		stack<char> opera;
 		vector<int> numcnt;
 		string s1;//后缀表达式
-				  //中缀表达式转后缀表达式
+
+		//中缀表达式转后缀表达式
 		for (int i = 0; i<s.size(); i++)
 		{
-			if (s[i] >= '0'&&s[i] <= '9')
+			if ( s[i] >= '0'&&s[i] <= '9' )
 			{
 				int tmp = 0;
 				while (s[i] >= '0'&&s[i] <= '9')
@@ -27,7 +28,7 @@ int main()
 				i--;
 				numcnt.push_back(tmp);
 			}
-			else if (s[i] == '-' || s[i] == '+')
+			else if ( s[i] == '-' || s[i] == '+' )
 			{
 				if (s[i] == '-' && (s[i - 1] == '(' ))
 					s1 += '0';
@@ -38,7 +39,7 @@ int main()
 				}
 				opera.push(s[i]);
 			}
-			else if (s[i] == '*' || s[i] == '/')
+			else if ( s[i] == '*' || s[i] == '/' )
 			{
 				while (!opera.empty() && (opera.top() == '*' || opera.top() == '/'))
 				{
@@ -47,9 +48,9 @@ int main()
 				}
 				opera.push(s[i]);
 			}
-			else if (s[i] == '(' )
+			else if ( s[i] == '(' )
 				opera.push(s[i]);
-			else if (s[i] == ')')
+			else if ( s[i] == ')' )
 			{
 				while (opera.top() != '(')
 				{
@@ -61,11 +62,13 @@ int main()
 			else
 				cout << "Invalid input!" << endl;
 		}
+
 		while (!opera.empty())
 		{
 			s1 += opera.top();
 			opera.pop();
 		}
+
 		//计算后缀表达式的值
 		stack<int> nums;
 		int ind = 0;

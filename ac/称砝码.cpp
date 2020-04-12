@@ -12,7 +12,7 @@
 using namespace std;
 int main()
 {
-    int n;
+    int n;// 砝码种类
     while(cin>>n)
     {
         int m[10]={0};//砝码的重量
@@ -22,22 +22,28 @@ int main()
         for(int i=0;i<n;i++)
             cin>>x[i];
         int v[120000]={0};
+
+        // max 统计所有砝码的最大重量
         int max = 0;
         for(int i=0;i<n;i++)
             max+=m[i]*x[i];
 
+        // 遍历n种砝码类型，i
         for(int i=0;i<n;i++)
         {
             for(int k=max;k>=0;k--)
             {
+                // 遍历种类i的砝码类型，数量j从1到该种类最大值
                 for(int j=1;j<=x[i];j++)
                 {
-                    if(k==0||(v[k]==1))
+                    // v[k] 表示由其他砝码可以组成k的重量
+                    if(  k==0  ||  (v[k]==1)  )
                         v[k+j*m[i]]=1;
                 }
             }
         }
 
+        // 计算数组 v 中有多少值
         int cnt=1;
         for(int i=1;i<=max;i++){
             if(v[i]==1){

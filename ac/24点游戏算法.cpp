@@ -1,47 +1,30 @@
 #include <iostream>
 #include <vector>
-#include <algorithm>
 using namespace std;
 
-void check24(const vector<int> &nums, int index, double result, bool &isSuccess)
+bool is24(vector<int> a, int tot, int result)
 {
-    if (index == 4)   //递归结束条件
+    if(a.empty())
+        return result==tot;
+    for(int i=0; i<a.size() ;i++)
     {
-        if (abs(result - 24) < 1e-6)
-            isSuccess = true;
-        return;
+        vector<int> b(a);
+        b.erase(b.begin()+i);
+        if(is24(b,tot,result+a[i]) || is24(b,tot,result-a[i]) 
+        || is24(b,tot,result*a[i]) || is24(b,tot,result/a[i]))
+            return true;
     }
-    for (int i = 0; i < 4; i++)
-    {
-        if (i == 0)
-            check24(nums, index + 1, result + nums[index], isSuccess);
-        else if (i == 1)
-            check24(nums, index + 1, result - nums[index], isSuccess);
-        else if(i==2)
-            check24(nums, index + 1, result * nums[index], isSuccess);
-        else
-            check24(nums, index + 1, result / nums[index], isSuccess);
-        if (isSuccess)
-            return;
-    }
+    return false;
 }
 
 int main()
 {
-    vector<int>nums(4);
-    while (cin >> nums[0] >> nums[1] >> nums[2] >> nums[3])
+    vector<int> a(4,0);
+    while(cin >> a[0] >> a[1] >> a[2] >> a[3])
     {
-        sort(nums.begin(), nums.end());
-        bool isSuccess = false;
-        do {
-            check24(nums, 0, 0, isSuccess);
-            if (isSuccess)
-                break;
-        } while (next_permutation(nums.begin(), nums.end()));
-        if (isSuccess)
-            cout << "true" << endl;
+        if(is24(a,24,0))
+            cout<<"true"<<endl;
         else
-            cout << "false" << endl;       
+            cout<<"false"<<endl;
     }
-    return 0;
 }

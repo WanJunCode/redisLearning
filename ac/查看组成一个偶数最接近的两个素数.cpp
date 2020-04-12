@@ -17,6 +17,7 @@ void FindNum(int num)
 {
     if (num <= 2|| num%2 != 0)
         return;
+    
     int middle = num / 2;
     for (int i = middle; i >= 2; i--)
     {

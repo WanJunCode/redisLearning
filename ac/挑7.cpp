@@ -32,8 +32,9 @@ int main()
         {
             for(int i=7;i<=n;i++)
             {
+                // 判断是否是7的倍数
                 if(i%7==0)
-                        count++;
+                    count++;
                 else if(Ifseven(i))
                     count++;
             }

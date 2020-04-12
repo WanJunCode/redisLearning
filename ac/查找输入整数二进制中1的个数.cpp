@@ -13,7 +13,7 @@ int main()
         {
             if (n%2)
                 cnt++;
-            n /= 2;
+            n = n >> 1;
         }
         cout << cnt << endl;
     }

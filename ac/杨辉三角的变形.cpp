@@ -8,8 +8,9 @@ int main()
     int num;
     while(cin>>num)
     {
-        int col=1+2*num;
+        int col=1+2*num;    // 计算第num行具有的元素个数
         vector<vector<int>> yh(num,vector<int>(col,0));
+        // 初始化杨辉三角的第一行的数
         yh[0][(col-1)/2]=1;
         for(int i=1;i<num;i++)
         {

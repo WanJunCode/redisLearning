@@ -11,7 +11,7 @@ int main(){
     while(cin>>tmp){
         mystr.push_back(tmp);
     }
-     
+
     string each;
     string eve;
     cout<<mystr.size()<<endl;

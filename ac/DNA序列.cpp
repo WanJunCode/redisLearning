@@ -3,8 +3,8 @@ using namespace std;
 
 int main()
 {
-	int n;
-	string str;
+	int n;			// 子串长度
+	string str;		// 基因序列
 	while(cin>>str>>n){
 		double maxRatio=0;
 		string maxRatioStr;

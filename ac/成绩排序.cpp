@@ -1,49 +1,36 @@
 #include <iostream>
 #include <string>
+#include <algorithm>
 
 using namespace std;
+int n, bs, score[500], r[500];
 
-int main()
-{
-    int n;
-    while (cin >> n)
+bool cmp(int i,int j){
+    return score[i]<score[j];
+}
+
+bool cmp1(int i,int j){
+    return score[i]>score[j];
+}
+
+int main() {
+    string name[500];
+    int i,j,k;
+    while(cin>>n>>bs)
     {
-        int flag;
-        cin >> flag;
-        int arr[1000];
-        string str[1000];
-        for (int i = 0; i < n; i++)
-            cin >> str[i] >> arr[i];//利用cin输入特性依次输入姓名与成绩
-        int j;
+        for(i=0;i<n;i++){
+            r[i]=i;
+            cin>>name[i]>>score[i];
+        }
 
-        for (int i = 0; i < n; i++)
-        {
-            int max = arr[0], min = arr[0];
-            int x = 0;
-            for (j = 0; j < n; j++)
-            {
-                if (flag == 0)
-                {
-                    if (max<arr[j])//找到最大的成绩，并取出下标
-                    {
-                        max = arr[j];
-                        x = j;
-                    }
-                }
-                else if (flag == 1)
-                {
-                    if (min>arr[j])
-                    {
-                        min = arr[j];
-                        x = j;
-                    }
-                }
-            }
-            cout << str[x] << " " << arr[x] << endl;
-            if (flag == 0)
-                arr[x] = -1;
-            else if (flag == 1)
-                arr[x] = 10000;
+        if(bs==1)
+            stable_sort(r,r+n,cmp);
+        else
+            stable_sort(r,r+n,cmp1);
+
+        for(i=0;i<n;i++){
+            int t = r[i];
+            cout << name[t]<<' '<<score[t]<<endl;
         }
     }
     return 0;

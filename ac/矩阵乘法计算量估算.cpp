@@ -6,14 +6,16 @@ using namespace std;
 
 int main()
 {
-    int N;
+    int N;  // 矩阵个数
     while (cin >> N)
     {
+        // N行 2列
         vector<vector<int>> V(N, vector<int>(2, 0));//初始化二维数组
         string rule;
         for (auto &i : V)
             for (auto &j : i)
                 cin >> j;
+
         cin >> rule;
         int count = 0;
         stack<char> cal;
