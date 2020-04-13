@@ -2,6 +2,7 @@
 #include <vector>
 using namespace std;
 
+// 计算24点
 bool is24(vector<int> a, int tot, int result)
 {
     if(a.empty())

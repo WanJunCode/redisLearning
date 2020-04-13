@@ -1,5 +1,7 @@
-#include<iostream>
-#include<algorithm>
+// 火车进站   有难度
+
+#include <iostream>
+#include <algorithm>
 using namespace std;
 
 int main()
@@ -15,13 +17,17 @@ int main()
             cin>>train[i];//train记录进站火车号，需要对它字典序输出
             temp[train[i]]=i;//temp记录进站先后顺序，需要对它进行比较（是否符合出栈要求）
         }
+
+        // 整理所有进站的火车编号
         sort(train,train+N);
+
         int count = 0;
         do
         {
             int flag=1;//该排列不符合，则置零
             for(i=0;i<N-1;i++)//对于每一个出栈数temp[train[i]]，（接下）
             {
+                // 获得当前 i 编号火车在 temp中是第几次进站的
                 int current=temp[train[i]];
                 int cmp=current;
                 for(j=i;j<N;j++)//它之后所有比它小的数
@@ -41,8 +47,7 @@ int main()
                     cout<<train[k]<<" ";
             cout<<train[N-1]<<endl;
             count++;
-        }
-        while(next_permutation(train,train+N));
+        }while(next_permutation(train,train+N));// 获得下一个全排列
     }
     return 0;
 }

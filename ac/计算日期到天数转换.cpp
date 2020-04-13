@@ -1,3 +1,8 @@
+// 计算日期到天数
+
+// 输入的int类型的 年 月 日数值、
+// 计算该日期是当年的第几天
+
 #include<iostream>
 
 using namespace std;

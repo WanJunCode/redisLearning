@@ -1,3 +1,5 @@
+// 查找输入整数二进制中1的个数
+
 #include <iostream>
 #include <string>
 

@@ -14,7 +14,6 @@
 */
 
 
-
 #include<stdio.h>
 int func(int num_apple,int plane)
 {

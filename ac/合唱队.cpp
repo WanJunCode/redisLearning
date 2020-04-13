@@ -19,19 +19,21 @@ int main()
     while(cin>>n)
     {
     	vector<int> a(n);
-        vector<int> dp1(n+1,1);//
-        vector<int> dp2(n+1,1);//
+        vector<int> dp1(n+1,1);// 全部初始化为1
+        vector<int> dp2(n+1,1);// 全部初始化为1
         for(int i=0;i<n;++i)
         {
             cin>>a[i];
         }
         // 翻转
         vector<int> ra(a.rbegin(),a.rend());
-
+        
         for(int i=1;i<a.size();++i)
         {
             for(int j=0;j<i;++j)
             {
+                // 先选择位置i同学，然后遍历i左边左右的身高
+                // 从左边所有身高中，选择小于i身高的，并且值最大的+1
                 if(a[i]>a[j])
                 {
                     dp1[i]=max(dp1[i],dp1[j]+1);
@@ -50,7 +52,8 @@ int main()
             }
         }
 
-        int mm=std::numeric_limits<int>::min();
+        // int mm=std::numeric_limits<int>::min();  获得最小值
+        int mm = 0;
         for(int i=0;i<a.size();++i)
         {
             int j=a.size()-i-1;

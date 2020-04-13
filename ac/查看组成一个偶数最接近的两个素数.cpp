@@ -1,8 +1,11 @@
+// 查看组成一个偶数最接近的两个素数
+
 #include <iostream>
 #include <string>
 
 using namespace std;
  
+//  判断是否是素数
 bool isS(int num)
 {
     for (int i = 2; i*i <= num; i++)

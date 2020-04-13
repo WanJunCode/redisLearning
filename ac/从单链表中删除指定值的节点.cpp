@@ -15,6 +15,7 @@ int main(){
         head->val=head_value;
         head->next=NULL;
         q=head;
+        // x 是要插入的数值，y表示x插入到y后面
         for(int i=0;i<n-1;i++){
             int x,y;
             cin>>x>>y;
@@ -31,6 +32,7 @@ int main(){
             }
             q=head;
         }
+        // 输入需要删除的数值
         int denum;
         cin>>denum;
         q=head;

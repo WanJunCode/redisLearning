@@ -11,7 +11,6 @@ void fun(string str){
     cout<<str.append(8-str.size(),'0')<<endl;
 }
 
-
 int main(){
     string s1,s2;
     cin>>s1;

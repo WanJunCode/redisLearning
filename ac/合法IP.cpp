@@ -1,3 +1,4 @@
+// 合法IP，判断输入的字符串表示的IP地址是否合法
 #include<iostream>
 #include<vector>
 #include<string>

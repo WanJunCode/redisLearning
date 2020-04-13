@@ -1,6 +1,7 @@
-#include<iostream>
+// 将真分数分解为埃及分数
 
-#include<string>
+#include <iostream>
+#include <string>
 
 using namespace std;
 

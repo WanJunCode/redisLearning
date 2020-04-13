@@ -2,6 +2,8 @@
 #include <string>
 using namespace std;
 
+
+// 中文字符
 int main(){
     string s;
     int N;

@@ -1,3 +1,5 @@
+// 查找两个字符串a,b中的最长公共子串
+
 #include <iostream>
 #include <vector>
 #include <string>

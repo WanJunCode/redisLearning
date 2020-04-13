@@ -1,3 +1,5 @@
+// 计算字符串的相似度
+
 #include<iostream>
 #include<string>
 #include<vector>

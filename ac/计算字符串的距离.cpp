@@ -1,3 +1,5 @@
+// 计算字符串的距离
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -11,13 +13,14 @@ int main()
         int i,j,len1=str1.size(),len2=str2.size();
         // 动态规划
         vector<vector<int> > dp(len1+1,vector<int>(len2+1,0));
-        // 将动态规划数组第一行和第一列值初始化
+        // 将动态规划数组第一行和第一列值初始化为 i
         for(i=1;i<=len1;i++)
             dp[i][0]=i;
         for(i=1;i<=len2;i++)
             dp[0][i]=i;
 
-        for(i=1;i<=len1;i++){
+        for(i=1;i<=len1;i++)
+        {
             for(j=1;j<=len2;j++)
             {
                 // [i][j] 查找最小的 [i][j-1]或[i-1][j]  最小值+1

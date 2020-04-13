@@ -1,3 +1,6 @@
+// 表示数字
+// 字符中所有出现的数字前后加上符号“*”，其他字符保持不变
+
 #include <iostream>
 #include <string>
 
