@@ -13,7 +13,7 @@ int main()
     string s;
     while(cin>>s)
     {
-        bool ok=true;      
+        bool ok=true;
         if(s.size()<9)
             ok=false;
         if(ok)
