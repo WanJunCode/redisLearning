@@ -23,9 +23,10 @@ int main(){
         vector<int> rlist(mlist.rbegin(),mlist.rend());
         // vector<int, vector<int> >  dp(num, vector<int>(num,0));
         // !! 默认初始化为1
-        vector<int> dp1(num+1,1);
-        vector<int> dp2(num+1,1);
+        vector<int> dp1(num,1);
+        vector<int> dp2(num,1);
 
+        // 如果有6个人，i从1遍历到5
         for(int i=1;i<num;i++){
             for(int j=0;j<i;j++){
                 if(mlist[i]>mlist[j])// i 的身高大于 j
