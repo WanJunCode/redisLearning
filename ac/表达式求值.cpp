@@ -23,6 +23,7 @@ int main()
 		//中缀表达式转后缀表达式
 		for (int i = 0; i<s.size(); i++)
 		{
+			// 获得数值，存入 numcnt
 			if ( s[i] >= '0'&&s[i] <= '9' )
 			{
 				int tmp = 0;
