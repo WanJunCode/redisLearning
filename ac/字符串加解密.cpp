@@ -9,7 +9,7 @@ string& code(string &s)
         {
             if(s[i]<='z'&&s[i]>='a')
             {
-                // 小写
+                // 小写字母转换为大写字母后加1
                 if(s[i]=='z')
                 {
                     s[i]='A';
@@ -21,7 +21,7 @@ string& code(string &s)
             }
             else
             {
-                // 大写
+                // 大写字母转换为小写字母后加1
                 if(s[i]=='Z')
                 {
                     s[i]='a';
@@ -47,6 +47,7 @@ string& decode(string &s)
 {
     for(int i=0;i<s.size();++i)
     {
+        // 判断如果是英文字母
         if(std::isalpha(s[i]))
         {
             if(s[i]<='z'&&s[i]>='a')

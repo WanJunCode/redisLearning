@@ -1,3 +1,5 @@
+// 将输入的数字颠倒后输出
+
 #include <iostream>
 #include <string>
 using namespace std;

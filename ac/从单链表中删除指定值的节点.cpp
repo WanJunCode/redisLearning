@@ -24,7 +24,7 @@ int main(){
             p->next=NULL;
             while(q){
                 if(q->val==y){
-                      p->next=q->next;
+                    p->next=q->next;
                     q->next=p;
                     break;
                 }else

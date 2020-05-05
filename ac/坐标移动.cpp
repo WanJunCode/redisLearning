@@ -26,6 +26,7 @@ int main()
 				int n = 0;
 				int invalid = 0;    //数字为是否非法
 				for (int i = 1; i<s1.size(); ++i) { //数字位判断与提取，A1A
+					// 判断数字是否合法
 					if (s1[i] >= '0'&&s1[i] <= '9')
 						n = n * 10 + (s1[i] - '0');
 					else {
